@@ -95,6 +95,7 @@ class SensorReadingOut(BaseModel):
     flame_detected: bool
     status: PipelineStatus
     reason: Optional[str]
+    valve_state: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True

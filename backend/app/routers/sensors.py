@@ -100,4 +100,5 @@ async def ingest_reading(req: schemas.SensorIngest, db: Session = Depends(get_db
         "incident": incident_payload,
     })
 
+    reading.valve_state = device.valve_state.value
     return reading

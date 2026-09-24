@@ -39,7 +39,7 @@
 
 // ---------- PIN DEFINITIONS ----------
 const int PIN_MQ2     = A0;  // MQ-2 Analog Input
-const int PIN_FLAME   = 2;   // Flame Sensor Digital Input (LOW = Flame Detected)
+const int PIN_FLAME   = 13;   // Flame Sensor Digital Input (LOW = Flame Detected)
 const int PIN_SERVO   = 9;   // Servo Signal Pin
 const int PIN_BUZZER  = 8;   // Optional Buzzer / Indicator LED
 const int PIN_SW_RX   = 10;  // SoftwareSerial RX (from ESP32 TX)
