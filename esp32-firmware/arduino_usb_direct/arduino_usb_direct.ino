@@ -37,12 +37,19 @@
 
 #include <Servo.h>
 
-const int PIN_MQ2    = A0;
-const int PIN_FLAME  = 13;
-const int PIN_SERVO  = 9;
-const int PIN_BUZZER = 8;
+// ================= PIN CONFIGURATION =================
+const int PIN_MQ2    = A0;  // MQ-2 Analog Out (A0)
+const int PIN_FLAME  = 2;   // Flame Sensor Digital Out (D0) -> Digital Pin 2
+const int PIN_SERVO  = 9;   // Servo Motor Signal (Orange/Yellow) -> Digital Pin 9
+const int PIN_BUZZER = 8;   // Buzzer / Alert LED (+) -> Digital Pin 8
 
+// ================= SENSOR CALIBRATION =================
+// Baseline clean-air ADC reading for MQ-2 (typically 80-130 in clean ambient air)
+const int CLEAN_AIR_BASELINE = 90; 
+
+// Threshold for Hazardous Gas Leak (PPM equivalent above baseline)
 const float GAS_THRESHOLD = 300.0;
+
 const int VALVE_OPEN_ANGLE   = 0;
 const int VALVE_CLOSED_ANGLE = 180;
 
@@ -54,6 +61,7 @@ void setup() {
   // 9600 baud rate matching python bridge
   Serial.begin(9600);
 
+  // Digital Pin 2 with internal pull-up (most flame modules pull LOW on flame detection)
   pinMode(PIN_FLAME, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
@@ -64,15 +72,30 @@ void setup() {
 }
 
 void loop() {
-  // 1. Read MQ-2 Sensor (0-1023 -> 0-1000 index)
-  int rawGas = analogRead(PIN_MQ2);
-  float gasLevel = (float)rawGas * (1000.0 / 1023.0);
+  // 1. Read MQ-2 Sensor with 8x Oversampling for stable, noise-free readings
+  long adcSum = 0;
+  for (int i = 0; i < 8; i++) {
+    adcSum += analogRead(PIN_MQ2);
+    delayMicroseconds(200);
+  }
+  float rawGas = (float)adcSum / 8.0;
 
-  // 2. Read Flame Sensor (Active LOW)
-  bool flameDetected = (digitalRead(PIN_FLAME) == LOW);
+  // Calibrate gas reading: map clean-air baseline (90 ADC) to 0, and high gas (900 ADC) to 1000 PPM
+  float gasLevel = 0.0;
+  if (rawGas > CLEAN_AIR_BASELINE) {
+    gasLevel = (rawGas - CLEAN_AIR_BASELINE) * (1000.0 / (1023.0 - CLEAN_AIR_BASELINE));
+  } else {
+    // Slight ambient trace in clean air (0 - 15 PPM)
+    gasLevel = (rawGas / (float)CLEAN_AIR_BASELINE) * 12.0;
+  }
 
-  // 3. Local Safety Logic: Gas > 300 or Flame
-  bool localHazard = (gasLevel > GAS_THRESHOLD) || flameDetected;
+  // 2. Read Flame Sensor (D0 on Pin 2)
+  // Standard IR flame sensor modules output LOW when flame IR is sensed (Active LOW)
+  int flamePinState = digitalRead(PIN_FLAME);
+  bool flameDetected = (flamePinState == LOW);
+
+  // 3. Local Safety Logic: Gas > 300 PPM or Flame detected -> 180° Emergency Shutoff
+  bool localHazard = (gasLevel >= GAS_THRESHOLD) || flameDetected;
 
   if (localHazard) {
     digitalWrite(PIN_BUZZER, HIGH);
@@ -84,7 +107,7 @@ void loop() {
     digitalWrite(PIN_BUZZER, LOW);
   }
 
-  // 4. Check for Remote Control Commands from Website via USB
+  // 4. Remote Control Commands via USB Serial from Website Operator
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -99,19 +122,22 @@ void loop() {
     }
   }
 
-  // 5. Stream Structured Telemetry JSON to PC every 1.5 seconds
-  if (millis() - lastSend >= 1500) {
+  // 5. Stream Structured Telemetry JSON to PC every 0.1 seconds (100ms = 10Hz)
+  if (millis() - lastSend >= 100) {
     lastSend = millis();
 
-    // Print single-line JSON format for python bridge to parse cleanly
     Serial.print("{\"mq2\":");
     Serial.print(gasLevel, 1);
+    Serial.print(",\"raw_gas\":");
+    Serial.print((int)rawGas);
     Serial.print(",\"flame\":");
     Serial.print(flameDetected ? "true" : "false");
+    Serial.print(",\"flame_pin\":");
+    Serial.print(flamePinState);
     Serial.print(",\"valve_closed\":");
     Serial.print(isValveClosed ? "true" : "false");
     Serial.println("}");
   }
 
-  delay(50);
+  delay(10);
 }

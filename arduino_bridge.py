@@ -91,7 +91,9 @@ def extract_telemetry(buffer: str):
                 mq2 = float(data.get("mq2", 0))
                 flame = bool(data.get("flame", False))
                 valve_closed = bool(data.get("valve_closed", False) or data.get("valve", 0) == 180)
-                return mq2, flame, valve_closed, remainder
+                raw_gas = data.get("raw_gas")
+                flame_pin = data.get("flame_pin")
+                return mq2, flame, valve_closed, raw_gas, flame_pin, remainder
             except Exception:
                 pass
 
@@ -103,7 +105,7 @@ def extract_telemetry(buffer: str):
         valve_closed = bool(re.search(r'valve[:= ]*(closed|180|true|1)', buffer, re.I))
         # Clear buffer past the match
         remainder = buffer[gas_match.end():]
-        return mq2, flame, valve_closed, remainder
+        return mq2, flame, valve_closed, None, None, remainder
 
     # 3. Try CSV line (e.g. "150.2,0,0\n")
     csv_match = re.search(r'([0-9]+(?:\.[0-9]+)?)\s*,\s*([01])\s*,\s*([01])', buffer)
@@ -112,9 +114,9 @@ def extract_telemetry(buffer: str):
         flame = (csv_match.group(2) == "1")
         valve_closed = (csv_match.group(3) == "1")
         remainder = buffer[csv_match.end():]
-        return mq2, flame, valve_closed, remainder
+        return mq2, flame, valve_closed, None, None, remainder
 
-    return None, None, None, buffer
+    return None, None, None, None, None, buffer
 
 
 def main():
@@ -158,7 +160,7 @@ def main():
                 if len(rx_buffer) > 2048:
                     rx_buffer = rx_buffer[-512:]
 
-                mq2, flame, valve_closed, rx_buffer = extract_telemetry(rx_buffer)
+                mq2, flame, valve_closed, raw_gas, flame_pin, rx_buffer = extract_telemetry(rx_buffer)
 
                 if mq2 is not None:
                     current_time = time.time()
@@ -166,10 +168,14 @@ def main():
                     if current_time - last_post_time >= 0.1:
                         last_post_time = current_time
 
-                        hazard_str = "🚨 HAZARD!" if (mq2 > 300 or flame) else "✅ SAFE"
+                        hazard_str = "🚨 HAZARD!" if (mq2 >= 300 or flame) else "✅ SAFE"
                         valve_str = "180° CLOSED" if valve_closed else "0° OPEN"
                         ts = datetime.now().strftime('%H:%M:%S.%f')[:-4]
-                        print(f"[{ts}] {hazard_str} Gas: {mq2:.1f} | Flame: {flame} | Valve: {valve_str}")
+                        
+                        extra_info = ""
+                        if raw_gas is not None:
+                            extra_info = f" (ADC: {raw_gas} | D2: {flame_pin})"
+                        print(f"[{ts}] {hazard_str} Gas: {mq2:.1f} PPM{extra_info} | Flame: {flame} | Valve: {valve_str}")
 
                         # Post reading to website backend
                         server_status, valve_cmd = post_reading(
