@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  pipelineguard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pipelineguard_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - JWT_SECRET=change-this-to-a-secure-secret-key
+      - ACCESS_TOKEN_EXPIRE_MINUTES=120
+      - MQ2_WARNING=300.0
+      - MQ2_CRITICAL=600.0
+      - SMS_PROVIDER=simulated
+      - DATABASE_URL=sqlite:///./pipeline_gas.db
+    volumes:
+      # Persists SQLite database across container restarts
+      - db_data:/app/backend
+
+volumes:
+  db_data:
