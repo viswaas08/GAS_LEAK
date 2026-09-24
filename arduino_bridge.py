@@ -120,7 +120,7 @@ def main():
     parser = argparse.ArgumentParser(description="PipelineGuard Arduino USB Bridge")
     parser.add_argument("--port", default=None, help="COM port (e.g. COM3). Auto-detected if omitted.")
     parser.add_argument("--baud", type=int, default=9600, help="Baud rate (default: 9600)")
-    parser.add_argument("--host", default="http://localhost:8000", help="Website backend URL (default: http://localhost:8000)")
+    parser.add_argument("--host", default="https://gasleak-git-main-viswaas08s-projects.vercel.app", help="Website backend URL (default: https://gasleak-git-main-viswaas08s-projects.vercel.app)")
     parser.add_argument("--device", default="ESP32-01", help="Device code in dashboard (default: ESP32-01)")
     args = parser.parse_args()
 
@@ -134,10 +134,10 @@ def main():
     print("Press Ctrl+C to stop.\n")
 
     try:
-        ser = serial.Serial(port, args.baud, timeout=1)
+        ser = serial.Serial(port, args.baud, timeout=0.1)
         time.sleep(2)
         ser.reset_input_buffer()
-        print(f"Connected to {port} successfully! Listening for telemetry...\n")
+        print(f"Connected to {port} successfully! Listening for telemetry at 0.1s frequency...\n")
     except Exception as e:
         print(f"[FATAL] Could not open port {port}: {e}")
         print("Tip: Make sure the Arduino Serial Monitor in Arduino IDE is CLOSED.")
@@ -161,13 +161,13 @@ def main():
 
                 if mq2 is not None:
                     current_time = time.time()
-                    # Rate limit posts to website (at least 1.2s between posts)
-                    if current_time - last_post_time >= 1.2:
+                    # 0.1s (100ms) Real-Time Ingestion
+                    if current_time - last_post_time >= 0.1:
                         last_post_time = current_time
 
                         hazard_str = "🚨 HAZARD!" if (mq2 > 300 or flame) else "✅ SAFE"
                         valve_str = "180° CLOSED" if valve_closed else "0° OPEN"
-                        print(f"[{time.strftime('%H:%M:%S')}] {hazard_str} Gas: {mq2:.1f} | Flame: {flame} | Valve: {valve_str}")
+                        print(f"[{time.strftime('%H:%M:%S.%f')[:-4]}] {hazard_str} Gas: {mq2:.1f} | Flame: {flame} | Valve: {valve_str}")
 
                         # Post reading to website backend
                         server_status, valve_cmd = post_reading(
@@ -185,7 +185,7 @@ def main():
                             ser.write(b"OPEN\n")
                             ser.flush()
 
-            time.sleep(0.05)
+            time.sleep(0.01)
 
     except KeyboardInterrupt:
         print("\nStopping Arduino bridge.")

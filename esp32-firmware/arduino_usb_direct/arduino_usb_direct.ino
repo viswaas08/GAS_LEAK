@@ -38,7 +38,7 @@
 #include <Servo.h>
 
 const int PIN_MQ2    = A0;
-const int PIN_FLAME  = 2;
+const int PIN_FLAME  = 13;
 const int PIN_SERVO  = 9;
 const int PIN_BUZZER = 8;
 
