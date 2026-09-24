@@ -5,6 +5,22 @@ For the prototype, sensible defaults are provided via a local .env file
 """
 import os
 from datetime import timedelta
+from pathlib import Path
+
+# Automatically load local .env if present
+for possible_env in [
+    Path(__file__).resolve().parent.parent / ".env",
+    Path.cwd() / ".env",
+    Path.cwd() / "backend" / ".env"
+]:
+    if possible_env.exists():
+        with open(possible_env, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+        break
 
 class Settings:
     # --- Security ---
