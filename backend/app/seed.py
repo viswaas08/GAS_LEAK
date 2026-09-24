@@ -1,7 +1,7 @@
 """
 Run with: python -m app.seed
-Creates 3 demo zones/devices and an admin account so the dashboard isn't
-empty on first launch.
+Initializes the system by ensuring the Admin account exists.
+No demo data is added — live zones and readings are populated by physical ESP32 devices.
 """
 from datetime import datetime
 from .database import SessionLocal, Base, engine
@@ -14,27 +14,29 @@ Base.metadata.create_all(bind=engine)
 def run():
     db = SessionLocal()
     try:
-        if db.query(models.User).count() == 0:
+        # Create default Admin if not exists
+        if db.query(models.User).filter(models.User.email == "admin@pipelineguard.io").count() == 0:
             admin = models.User(
                 name="Admin", email="admin@pipelineguard.io", phone="+910000000000",
                 password_hash=hash_password("Admin@12345"),
                 role=models.Role.ADMIN, phone_verified=True,
             )
             db.add(admin)
-            print("Created admin login -> admin@pipelineguard.io / Admin@12345")
-
-        for i in range(1, 4):
-            code = f"ESP32-0{i}"
-            if db.query(models.Device).filter(models.Device.device_code == code).first():
-                continue
-            device = models.Device(device_code=code, last_heartbeat=datetime.utcnow())
-            db.add(device)
             db.commit()
-            db.refresh(device)
-            zone = models.Zone(name=f"Pipeline {i:02d}", location=f"Sector {i}", device_id=device.id)
-            db.add(zone)
+            print("Admin user ready: admin@pipelineguard.io / Admin@12345")
+
+        # Clean up legacy demo zones if they have no real sensor readings attached
+        demo_zones = db.query(models.Zone).filter(models.Zone.name.in_(["Pipeline 01", "Pipeline 02", "Pipeline 03"])).all()
+        for z in demo_zones:
+            has_readings = db.query(models.SensorReading).filter(models.SensorReading.device_id == z.device_id).count() > 0
+            if not has_readings:
+                dev_id = z.device_id
+                db.delete(z)
+                if dev_id:
+                    dev = db.query(models.Device).filter(models.Device.id == dev_id).first()
+                    if dev:
+                        db.delete(dev)
         db.commit()
-        print("Seed complete.")
     finally:
         db.close()
 

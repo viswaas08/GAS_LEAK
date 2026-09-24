@@ -28,7 +28,14 @@ async def ingest_reading(req: schemas.SensorIngest, db: Session = Depends(get_db
     """
     device = db.query(models.Device).filter(models.Device.device_code == req.device_code).first()
     if not device:
-        raise HTTPException(404, f"Unknown device_code {req.device_code}")
+        # Dynamically register newly connected physical ESP32
+        device = models.Device(device_code=req.device_code, last_heartbeat=datetime.utcnow())
+        db.add(device)
+        db.commit()
+        db.refresh(device)
+        zone = models.Zone(name=f"Pipeline {req.device_code}", location="Monitored Segment", device_id=device.id)
+        db.add(zone)
+        db.commit()
     device.last_heartbeat = datetime.utcnow()
 
     status, reason = rules.evaluate(req.mq2, req.mq135, req.pressure, req.flame_detected)

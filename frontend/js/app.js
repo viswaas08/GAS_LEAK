@@ -51,8 +51,8 @@ function renderLoginForm() {
     <div class="auth-sub">Monitor pipeline zones in real time.</div>
     <div id="auth-msg"></div>
     <form id="login-form">
-      <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="email" value="admin@pipelineguard.io"></div>
-      <div class="field"><label>Password</label><input type="password" name="password" required autocomplete="current-password" value="Admin@12345"></div>
+      <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="admin@pipelineguard.io"></div>
+      <div class="field"><label>Password</label><input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"></div>
       <button class="btn-primary" type="submit">Sign in</button>
     </form>
     <div class="auth-switch">No account? <button id="go-register">Create one</button></div>
@@ -179,11 +179,7 @@ function bootDashboard() {
           <h3>Recent incidents</h3>
           <div id="incident-list"></div>
         </div>
-        <div class="panel">
-          <h3>Demo simulation</h3>
-          <div class="sim-grid" id="sim-grid"></div>
-          <div class="sim-note">No physical ESP32 is attached to this prototype. These buttons publish synthetic sensor payloads through the same ingestion path a real device would use, so the full detection → alert → SMS → shutoff pipeline runs end-to-end.</div>
-        </div>
+        <div id="admin-panel-container"></div>
       </div>
     </div>
     <div id="toast-stack"></div>
@@ -204,7 +200,7 @@ async function loadZonesAndIncidents() {
     renderSummary();
     renderZoneGrid();
     renderIncidentList();
-    renderSimGrid();
+    renderAdminPanel();
   } catch (err) {
     toast(err.message, "crit");
   }
@@ -244,7 +240,15 @@ function renderSummary() {
 function renderZoneGrid() {
   const grid = document.getElementById("zone-grid");
   if (!state.zones.length) {
-    grid.innerHTML = `<div class="empty-note">No zones configured yet.</div>`;
+    grid.innerHTML = `
+      <div class="empty-note" style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; border: 1px dashed var(--line); border-radius: var(--radius-m); background: var(--bg-1);">
+        <div style="font-size: 32px; margin-bottom: 8px;">📡</div>
+        <div style="font-size: 15px; font-weight: 600; color: var(--text-0); margin-bottom: 6px;">No Active Pipeline Zones Yet</div>
+        <div style="color: var(--text-2); font-size: 13px; max-width: 440px; margin: 0 auto 16px auto; line-height: 1.5;">
+          Power on your physical ESP32 WROOM-32. As soon as it transmits gas readings to <code>/api/sensors</code>, it will automatically register and stream live telemetry here.
+        </div>
+      </div>
+    `;
     return;
   }
   grid.innerHTML = state.zones.map(z => `
@@ -309,30 +313,178 @@ function renderIncidentList() {
   });
 }
 
-function renderSimGrid() {
-  const grid = document.getElementById("sim-grid");
-  if (!state.zones.length) { grid.innerHTML = ""; return; }
-  const zoneOptionsId = "sim-zone-select";
-  grid.innerHTML = `
-    <select id="${zoneOptionsId}" style="grid-column:1/-1;background:var(--bg-2);border:1px solid var(--line);color:var(--text-0);padding:8px;border-radius:6px;font-size:12px;">
-      ${state.zones.map(z => `<option value="${z.id}">${escapeHtml(z.name)}</option>`).join("")}
-    </select>
-    <button class="sim-btn" data-s="safe">✅ Normal</button>
-    <button class="sim-btn danger" data-s="gas_leak">🔥 Gas leak</button>
-    <button class="sim-btn danger" data-s="flame">🔥 Flame detected</button>
-    <button class="sim-btn" data-s="pressure_anomaly">📉 Pressure anomaly</button>
-    <button class="sim-btn" data-s="multi_warning">⚠️ Multi-warning</button>
-    <button class="sim-btn" data-s="offline">📴 Mark offline</button>
+function renderAdminPanel() {
+  const container = document.getElementById("admin-panel-container");
+  if (!container) return;
+  const user = API.getUser();
+  const isAdmin = user && user.role === "admin";
+
+  if (!isAdmin) {
+    container.innerHTML = `
+      <div class="panel">
+        <h3>System Status</h3>
+        <p class="panel-desc">Real-time pipeline monitoring active. Telemetry is streamed directly from connected ESP32 field units.</p>
+        <div style="font-size: 12.5px; color: var(--text-1); line-height: 1.7;">
+          <div>• <b>Gas Warning Level:</b> &gt; 300.0</div>
+          <div>• <b>Gas Critical Level:</b> &gt; 600.0</div>
+          <div>• <b>Automated Shutoff:</b> Armed</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;">Admin Console</h3>
+        <span class="role-badge" style="background:var(--amber-dim);color:var(--amber);border:none;">ADMIN</span>
+      </div>
+      <p class="panel-desc" style="margin-bottom:14px;">Manage hardware units, inspect users, and review security logs.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-ghost" id="admin-add-zone-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
+          <span>➕</span><span>Register New Pipeline Zone</span>
+        </button>
+        <button class="btn-ghost" id="admin-users-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
+          <span>👥</span><span>View System Users</span>
+        </button>
+        <button class="btn-ghost" id="admin-audit-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
+          <span>📋</span><span>Security Audit Logs</span>
+        </button>
+      </div>
+    </div>
   `;
-  grid.querySelectorAll(".sim-btn").forEach(btn => {
-    btn.onclick = async () => {
-      const zoneId = document.getElementById(zoneOptionsId).value;
-      try {
-        await API.simulate(zoneId, btn.dataset.s);
-        toast(`Simulated "${btn.dataset.s}" injected.`);
-      } catch (err) { toast(err.message, "crit"); }
-    };
-  });
+
+  document.getElementById("admin-add-zone-btn").onclick = openAddZoneModal;
+  document.getElementById("admin-users-btn").onclick = openUsersModal;
+  document.getElementById("admin-audit-btn").onclick = openAuditModal;
+}
+
+function openAdminModal(title, contentHtml) {
+  const existing = document.getElementById("admin-scrim");
+  if (existing) existing.remove();
+
+  const scrim = document.createElement("div");
+  scrim.className = "overlay-scrim";
+  scrim.id = "admin-scrim";
+  scrim.innerHTML = `
+    <div class="detail-panel" style="max-width:620px;width:95%;">
+      <div class="detail-head">
+        <div class="detail-title">${escapeHtml(title)}</div>
+        <button class="close-btn" id="close-admin-modal">✕</button>
+      </div>
+      <div style="margin-top:14px;">${contentHtml}</div>
+    </div>
+  `;
+  scrim.onclick = (e) => { if (e.target === scrim) scrim.remove(); };
+  document.body.appendChild(scrim);
+  document.getElementById("close-admin-modal").onclick = () => scrim.remove();
+}
+
+function openAddZoneModal() {
+  openAdminModal("Register New Pipeline Zone", `
+    <form id="add-zone-form">
+      <div class="field">
+        <label>Zone Name</label>
+        <input name="name" placeholder="e.g. Sector 1 Pipeline" required>
+      </div>
+      <div class="field">
+        <label>Location / Details</label>
+        <input name="location" placeholder="e.g. Main Distribution Line" required>
+      </div>
+      <div class="field">
+        <label>Device Code (matches ESP32)</label>
+        <input name="device_code" placeholder="e.g. ESP32-01" required>
+      </div>
+      <button class="btn-primary" type="submit" style="margin-top:12px;">Register Zone</button>
+    </form>
+  `);
+
+  document.getElementById("add-zone-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await API.createZone({
+        name: fd.get("name"),
+        location: fd.get("location"),
+        device_code: fd.get("device_code")
+      });
+      toast("Pipeline zone registered successfully.", "safe");
+      document.getElementById("admin-scrim")?.remove();
+      await loadZonesAndIncidents();
+    } catch (err) {
+      toast(err.message, "crit");
+    }
+  };
+}
+
+async function openUsersModal() {
+  openAdminModal("System Users", `<div class="empty-note">Loading users…</div>`);
+  try {
+    const users = await API.listUsers();
+    const modalBody = document.querySelector("#admin-scrim .detail-panel > div:last-child");
+    if (!modalBody) return;
+    if (!users.length) {
+      modalBody.innerHTML = `<div class="empty-note">No users found.</div>`;
+      return;
+    }
+    modalBody.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;color:var(--text-1);">
+          <thead>
+            <tr style="border-bottom:1px solid var(--line);text-align:left;color:var(--text-2);">
+              <th style="padding:8px 6px;">Name</th>
+              <th style="padding:8px 6px;">Email</th>
+              <th style="padding:8px 6px;">Phone</th>
+              <th style="padding:8px 6px;">Role</th>
+              <th style="padding:8px 6px;">Phone Verified</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => `
+              <tr style="border-bottom:1px solid var(--line-soft);">
+                <td style="padding:9px 6px;color:var(--text-0);font-weight:500;">${escapeHtml(u.name)}</td>
+                <td style="padding:9px 6px;">${escapeHtml(u.email)}</td>
+                <td style="padding:9px 6px;">${escapeHtml(u.phone || "—")}</td>
+                <td style="padding:9px 6px;"><span class="role-badge">${escapeHtml(u.role)}</span></td>
+                <td style="padding:9px 6px;">${u.phone_verified ? "✅ Yes" : "⏳ Pending"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch (err) {
+    toast(err.message, "crit");
+  }
+}
+
+async function openAuditModal() {
+  openAdminModal("Security & Operations Audit Log", `<div class="empty-note">Loading audit logs…</div>`);
+  try {
+    const logs = await API.listAudit();
+    const modalBody = document.querySelector("#admin-scrim .detail-panel > div:last-child");
+    if (!modalBody) return;
+    if (!logs.length) {
+      modalBody.innerHTML = `<div class="empty-note">No audit records logged yet.</div>`;
+      return;
+    }
+    modalBody.innerHTML = `
+      <div style="max-height:420px;overflow-y:auto;" class="scroll-thin">
+        ${logs.map(log => `
+          <div style="padding:10px;border-bottom:1px solid var(--line-soft);font-size:12.5px;">
+            <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:3px;font-size:11.5px;">
+              <span style="font-weight:600;color:var(--amber);text-transform:uppercase;">${escapeHtml(log.action)}</span>
+              <span>${new Date(log.created_at).toLocaleString()}</span>
+            </div>
+            <div style="color:var(--text-0);">${escapeHtml(log.detail || "No details")}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } catch (err) {
+    toast(err.message, "crit");
+  }
 }
 
 // ================= ZONE DETAIL =================
