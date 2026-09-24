@@ -17,6 +17,7 @@ Usage:
 
 import sys
 import time
+from datetime import datetime
 import json
 import re
 import argparse
@@ -167,7 +168,8 @@ def main():
 
                         hazard_str = "🚨 HAZARD!" if (mq2 > 300 or flame) else "✅ SAFE"
                         valve_str = "180° CLOSED" if valve_closed else "0° OPEN"
-                        print(f"[{time.strftime('%H:%M:%S.%f')[:-4]}] {hazard_str} Gas: {mq2:.1f} | Flame: {flame} | Valve: {valve_str}")
+                        ts = datetime.now().strftime('%H:%M:%S.%f')[:-4]
+                        print(f"[{ts}] {hazard_str} Gas: {mq2:.1f} | Flame: {flame} | Valve: {valve_str}")
 
                         # Post reading to website backend
                         server_status, valve_cmd = post_reading(
