@@ -201,8 +201,14 @@ async function loadZonesAndIncidents() {
     renderZoneGrid();
     renderIncidentList();
     renderAdminPanel();
+
+    // Dynamically update the open detail drawer in place without resetting DOM
+    if (state.selectedZoneId) {
+      const zone = state.zones.find(z => z.id === state.selectedZoneId);
+      if (zone) updateDetailPanel(zone);
+    }
   } catch (err) {
-    toast(err.message, "crit");
+    // Suppress background poll errors
   }
 }
 
@@ -527,13 +533,16 @@ async function renderDetailPanel(zone) {
       </div>
       <button class="close-btn" id="close-detail">✕</button>
     </div>
-    <span class="status-badge ${zone.status}" style="margin-bottom:16px;display:inline-flex;"><span class="dot"></span>${zone.status}</span>
-    <div class="reason-box"><b>Reason:</b> ${escapeHtml(latest ? latest.reason : "No readings yet")}</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+      <span class="status-badge ${zone.status}" id="detail-status-badge"><span class="dot"></span>${zone.status}</span>
+      <span style="font-size:11.5px;color:var(--text-2);background:var(--bg-2);padding:3px 8px;border-radius:4px;border:1px solid var(--line);">Threshold: Warning &gt; 300 | Critical &gt; 600</span>
+    </div>
+    <div class="reason-box"><b>Reason:</b> <span id="detail-reason-val">${escapeHtml(latest ? latest.reason : "All readings within normal operating range")}</span></div>
     <div class="detail-metrics">
-      <div class="detail-metric"><div class="metric-label">MQ-2 (gas)</div><div class="metric-value">${latest ? latest.mq2.toFixed(0) : "—"}</div></div>
-      <div class="detail-metric"><div class="metric-label">MQ-135 (air quality)</div><div class="metric-value">${latest ? latest.mq135.toFixed(0) : "—"}</div></div>
-      <div class="detail-metric"><div class="metric-label">Pressure (bar)</div><div class="metric-value">${latest ? latest.pressure.toFixed(2) : "—"}</div></div>
-      <div class="detail-metric"><div class="metric-label">Flame</div><div class="metric-value">${latest ? (latest.flame_detected ? "DETECTED" : "clear") : "—"}</div></div>
+      <div class="detail-metric"><div class="metric-label">MQ-2 (gas)</div><div class="metric-value" id="detail-mq2-val">${latest ? latest.mq2.toFixed(0) : "—"}</div></div>
+      <div class="detail-metric"><div class="metric-label">MQ-135 (air quality)</div><div class="metric-value" id="detail-mq135-val">${latest ? latest.mq135.toFixed(0) : "—"}</div></div>
+      <div class="detail-metric"><div class="metric-label">Pressure (bar)</div><div class="metric-value" id="detail-pressure-val">${latest ? latest.pressure.toFixed(2) : "—"}</div></div>
+      <div class="detail-metric"><div class="metric-label">Flame</div><div class="metric-value" id="detail-flame-val">${latest ? (latest.flame_detected ? '<span style="color:var(--crit);font-weight:700;">DETECTED</span>' : "clear") : "—"}</div></div>
     </div>
     <canvas class="chart" id="zone-chart"></canvas>
     <div class="valve-row">
@@ -553,6 +562,62 @@ async function renderDetailPanel(zone) {
 
   renderTimeline(incidents);
   renderChart(readings);
+}
+
+async function updateDetailPanel(zone) {
+  const panel = document.getElementById("detail-panel");
+  if (!panel) return;
+
+  let readings = [];
+  try { readings = await API.zoneReadings(zone.id, 40); } catch {}
+  const latest = readings.length ? readings[readings.length - 1] : null;
+  const incidents = state.incidents.filter(i => i.zone_id === zone.id).slice(0, 10);
+
+  // Update Status Badge
+  const badge = document.getElementById("detail-status-badge");
+  if (badge) {
+    badge.className = `status-badge ${zone.status}`;
+    badge.innerHTML = `<span class="dot"></span>${zone.status}`;
+  }
+
+  // Update Reason Text
+  const reasonEl = document.getElementById("detail-reason-val");
+  if (reasonEl && latest) {
+    reasonEl.textContent = latest.reason || "All readings within normal operating range";
+  }
+
+  // Update Metric Numbers smoothly
+  const mq2El = document.getElementById("detail-mq2-val");
+  if (mq2El && latest) mq2El.textContent = latest.mq2.toFixed(0);
+
+  const mq135El = document.getElementById("detail-mq135-val");
+  if (mq135El && latest) mq135El.textContent = latest.mq135.toFixed(0);
+
+  const presEl = document.getElementById("detail-pressure-val");
+  if (presEl && latest) presEl.textContent = latest.pressure.toFixed(2);
+
+  const flameEl = document.getElementById("detail-flame-val");
+  if (flameEl && latest) {
+    flameEl.innerHTML = latest.flame_detected
+      ? '<span style="color:var(--crit);font-weight:700;">DETECTED</span>'
+      : 'clear';
+  }
+
+  // Update Valve State
+  const valveEl = document.getElementById("valve-state-value");
+  if (valveEl) valveEl.textContent = zone.valve_state;
+
+  // Update Incident Timeline
+  renderTimeline(incidents);
+
+  // Update Chart in place without destroying canvas
+  if (state.chart && readings.length) {
+    state.chart.data.labels = readings.map(r => new Date(r.created_at).toLocaleTimeString());
+    state.chart.data.datasets[0].data = readings.map(r => r.mq2);
+    state.chart.data.datasets[1].data = readings.map(r => r.mq135);
+    state.chart.data.datasets[2].data = readings.map(r => r.pressure * 200);
+    state.chart.update("none");
+  }
 }
 
 function renderTimeline(incidents) {
@@ -654,15 +719,16 @@ async function pollValveStatus(zoneId, btn) {
   }, 1200);
 }
 
-// ================= WEBSOCKET & LIVE SYNC =================
+// ================= FAST ACTIVE POLLING & LIVE SYNC =================
 
 let pollInterval = null;
-let wsFailures = 0;
 
-function startPollingFallback() {
+function startLivePolling() {
   if (pollInterval) return;
   const pill = document.getElementById("conn-pill");
   if (pill) { pill.classList.add("live"); pill.innerHTML = `<span class="conn-dot"></span><span>Live</span>`; }
+
+  // High-frequency live polling: syncs telemetry every 1.2 seconds
   pollInterval = setInterval(async () => {
     if (!API.getToken()) {
       clearInterval(pollInterval);
@@ -670,20 +736,16 @@ function startPollingFallback() {
       return;
     }
     await loadZonesAndIncidents();
-    if (state.selectedZoneId) {
-      const zone = state.zones.find(z => z.id === state.selectedZoneId);
-      if (zone) renderDetailPanel(zone);
-    }
-  }, 3500);
+  }, 1200);
 }
 
 function connectWebSocket() {
+  startLivePolling(); // Always run live polling on cloud / serverless
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   let ws;
   try {
     ws = new WebSocket(`${proto}//${location.host}/ws`);
   } catch (e) {
-    startPollingFallback();
     return;
   }
   state.ws = ws;
