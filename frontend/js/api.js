@@ -68,7 +68,6 @@ const API = (() => {
     shutoff: (zoneId) => request("/api/actuator/shutoff", { method: "POST", body: { zone_id: zoneId, confirm: true } }),
     setValveState: (zoneId, targetState) => request("/api/actuator/valve-control", { method: "POST", body: { zone_id: zoneId, target_state: targetState } }),
     valveStatus: (zoneId) => request(`/api/actuator/${zoneId}/status`),
-    ingestSensor: (data) => request("/api/sensors", { method: "POST", body: data, auth: false }),
 
     simulate: (zoneId, scenario) => request("/api/simulate/event", { method: "POST", body: { zone_id: zoneId, scenario } }),
 

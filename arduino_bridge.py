@@ -190,15 +190,18 @@ def main():
 
                         is_safe = (mq2 < 100.0 and not flame)
 
-                        # Remote website operator control:
-                        # 1. Operator commanded CLOSED / SHUTOFF from website
-                        if valve_cmd in ("CLOSED", "COMMAND_SENT", "WAITING_CONFIRMATION") and not valve_closed:
-                            print("           ➔ [COMMAND] Manual Valve Switch OFF / Shutoff ➔ Arduino Servo 180° CLOSED!")
+                        # Remote website control & Safe Mode Enforcement:
+                        if is_safe and valve_closed:
+                            # Environment is completely safe; ensure Arduino valve stays 0° OPEN
+                            print("           ➔ [SAFE MODE] Environment safe ➔ Ensuring Arduino Servo is 0° OPEN!")
+                            ser.write(b"OPEN\n")
+                            ser.flush()
+                        elif valve_cmd in ("COMMAND_SENT", "WAITING_CONFIRMATION") and not valve_closed and not is_safe:
+                            print("           ➔ [COMMAND] Remote Emergency Shutoff ➔ Arduino Servo 180° CLOSED!")
                             ser.write(b"SHUTOFF\n")
                             ser.flush()
-                        # 2. Operator commanded OPEN from website
                         elif valve_cmd == "OPEN" and valve_closed:
-                            print("           ➔ [COMMAND] Manual Valve Switch ON / Open ➔ Arduino Servo 0° OPEN!")
+                            print("           ➔ [COMMAND] Remote Switch ON / Open ➔ Arduino Servo 0° OPEN!")
                             ser.write(b"OPEN\n")
                             ser.flush()
 
