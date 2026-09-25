@@ -87,11 +87,15 @@ async def ingest_reading(req: schemas.SensorIngest, db: Session = Depends(get_db
             open_incident.resolved = True
             open_incident.resolved_at = datetime.utcnow()
             db.add(models.IncidentEvent(incident_id=open_incident.id, event="Readings back to SAFE — incident resolved"))
-        
-        # In SAFE mode with no active hazard, auto-restore valve to OPEN
-        if device.valve_state != models.ValveState.OPEN:
-            device.valve_state = models.ValveState.OPEN
-        db.commit()
+            if device.valve_state != models.ValveState.OPEN:
+                device.valve_state = models.ValveState.OPEN
+            db.commit()
+        elif req.valve_closed is not None:
+            # Sync with the actual physical hardware valve state reported by the device
+            phys_state = models.ValveState.CLOSED if req.valve_closed else models.ValveState.OPEN
+            if device.valve_state != phys_state and device.valve_state not in (models.ValveState.COMMAND_SENT, models.ValveState.WAITING_CONFIRMATION):
+                device.valve_state = phys_state
+                db.commit()
 
     await manager.broadcast("sensor_update", {
         "device_code": device.device_code,
