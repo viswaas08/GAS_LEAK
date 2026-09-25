@@ -38,7 +38,7 @@ def acknowledge(incident_id: str, req: schemas.AcknowledgeRequest, db: Session =
     incident.acknowledged_by = user.name
     db.add(models.IncidentEvent(incident_id=incident.id,
                                  event=f"Operator acknowledged by {user.name}" + (f" — {req.note}" if req.note else "")))
-    db.add(models.AuditLog(user_id=user.id, action="INCIDENT_ACKNOWLEDGED", detail=incident_id))
+    db.add(models.AuditLog(user_id=user.id, module="INCIDENTS", action="INCIDENT_ACKNOWLEDGED", detail=incident_id))
     db.commit()
     db.refresh(incident)
     return incident

@@ -42,11 +42,12 @@ const int   MQTT_PORT     = 8883;             // TLS
 const char* DEVICE_CODE   = "ESP32-01";        // must match a Device in the backend
 
 // ---- Pins (adjust to your wiring) ----
-const int PIN_MQ2       = 34;   // analog
-const int PIN_MQ135     = 35;   // analog
-const int PIN_PRESSURE  = 32;   // analog (or use an I2C pressure sensor)
-const int PIN_FLAME     = 27;   // digital, LOW = flame detected (typical modules)
-const int PIN_ACTUATOR  = 26;   // relay/servo/LED — SAFE demo actuator only
+const int PIN_MQ2           = 34;   // analog
+const int PIN_MQ135         = 35;   // analog
+const int PIN_PRESSURE      = 32;   // analog (or use an I2C pressure sensor)
+const int PIN_FLAME         = 27;   // digital, LOW = flame detected (typical modules)
+const int PIN_ACTUATOR      = 26;   // relay/servo/LED — SAFE demo actuator only
+const int PIN_MANUAL_SWITCH = 25;   // manual switch/button (active LOW with internal pullup)
 
 WiFiClientSecure netClient;
 PubSubClient mqtt(netClient);
@@ -54,6 +55,12 @@ PubSubClient mqtt(netClient);
 unsigned long lastSensorPublish = 0;
 const unsigned long SENSOR_INTERVAL_MS = 2000;
 bool actuatorClosed = false;
+
+// Manual switch debounce state
+int lastSwitchReading = HIGH;
+int switchStableState = HIGH;
+unsigned long lastSwitchDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY_MS = 50;
 
 void connectWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -68,15 +75,24 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String t(topic);
   if (t.endsWith("/actuator/cmd")) {
     String commandId = doc["command_id"].as<String>();
+    String action = doc["action"] | doc["target_state"] | "shutoff";
+    action.toLowerCase();
+
     // --- Drive the SAFE demo actuator ---
-    digitalWrite(PIN_ACTUATOR, HIGH);   // e.g. energize relay / move servo to CLOSED
-    delay(1500);                        // simulate actuator travel time
-    actuatorClosed = true;
+    if (action == "open" || action == "on") {
+      digitalWrite(PIN_ACTUATOR, LOW);  // open valve
+      delay(1500);                      // simulate actuator travel time
+      actuatorClosed = false;
+    } else {
+      digitalWrite(PIN_ACTUATOR, HIGH); // close / shutoff valve
+      delay(1500);                      // simulate actuator travel time
+      actuatorClosed = true;
+    }
 
     StaticJsonDocument<128> ack;
     ack["device_code"] = DEVICE_CODE;
     ack["command_id"] = commandId;
-    ack["result"] = "closed";           // or "failed" if the actuator reports a fault
+    ack["result"] = actuatorClosed ? "closed" : "open";
     char buf[128];
     size_t n = serializeJson(ack, buf);
     String ackTopic = String("pipeline/") + DEVICE_CODE + "/actuator/ack";
@@ -102,6 +118,7 @@ void setup() {
   pinMode(PIN_FLAME, INPUT);
   pinMode(PIN_ACTUATOR, OUTPUT);
   digitalWrite(PIN_ACTUATOR, LOW); // valve open / relay off at boot
+  pinMode(PIN_MANUAL_SWITCH, INPUT_PULLUP);
   connectWiFi();
   connectMQTT();
 }
@@ -123,6 +140,7 @@ void publishSensors() {
   doc["mq135"] = mq135;
   doc["pressure"] = pressure;
   doc["flame_detected"] = flame;
+  doc["valve_closed"] = actuatorClosed;
   char buf[256];
   size_t n = serializeJson(doc, buf);
 
@@ -133,6 +151,32 @@ void publishSensors() {
 void loop() {
   if (!mqtt.connected()) connectMQTT();
   mqtt.loop();
+
+  // Read manual hardware switch with debouncing
+  int switchReading = digitalRead(PIN_MANUAL_SWITCH);
+  if (switchReading != lastSwitchReading) {
+    lastSwitchDebounceTime = millis();
+  }
+  if ((millis() - lastSwitchDebounceTime) > DEBOUNCE_DELAY_MS) {
+    if (switchReading != switchStableState) {
+      switchStableState = switchReading;
+      if (switchStableState == LOW) {
+        // Toggle valve
+        actuatorClosed = !actuatorClosed;
+        digitalWrite(PIN_ACTUATOR, actuatorClosed ? HIGH : LOW);
+
+        StaticJsonDocument<128> ack;
+        ack["device_code"] = DEVICE_CODE;
+        ack["event"] = "manual_switch_toggle";
+        ack["result"] = actuatorClosed ? "closed" : "open";
+        char buf[128];
+        size_t n = serializeJson(ack, buf);
+        String ackTopic = String("pipeline/") + DEVICE_CODE + "/actuator/ack";
+        mqtt.publish(ackTopic.c_str(), buf, n);
+      }
+    }
+  }
+  lastSwitchReading = switchReading;
 
   if (millis() - lastSensorPublish > SENSOR_INTERVAL_MS) {
     publishSensors();

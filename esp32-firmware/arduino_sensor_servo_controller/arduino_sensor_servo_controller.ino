@@ -38,12 +38,13 @@
 #include <SoftwareSerial.h>
 
 // ---------- PIN DEFINITIONS ----------
-const int PIN_MQ2     = A0;  // MQ-2 Analog Input
-const int PIN_FLAME   = 13;   // Flame Sensor Digital Input (LOW = Flame Detected)
-const int PIN_SERVO   = 9;   // Servo Signal Pin
-const int PIN_BUZZER  = 8;   // Optional Buzzer / Indicator LED
-const int PIN_SW_RX   = 10;  // SoftwareSerial RX (from ESP32 TX)
-const int PIN_SW_TX   = 11;  // SoftwareSerial TX (to ESP32 RX)
+const int PIN_MQ2           = A0;  // MQ-2 Analog Input
+const int PIN_FLAME         = 13;  // Flame Sensor Digital Input (LOW = Flame Detected)
+const int PIN_SERVO         = 9;   // Servo Signal Pin
+const int PIN_BUZZER        = 8;   // Optional Buzzer / Indicator LED
+const int PIN_MANUAL_SWITCH = 4;   // Manual Push Button / Switch (Pin 4 to GND)
+const int PIN_SW_RX         = 10;  // SoftwareSerial RX (from ESP32 TX)
+const int PIN_SW_TX         = 11;  // SoftwareSerial TX (to ESP32 RX)
 
 // ---------- THRESHOLDS ----------
 const float GAS_THRESHOLD = 300.0; // Gas level above 300 indicates leakage
@@ -59,6 +60,12 @@ bool isValveClosed = false;
 unsigned long lastTelemetryTime = 0;
 const unsigned long TELEMETRY_INTERVAL = 2000; // Send telemetry every 2 seconds
 
+// Manual switch debounce state
+int lastSwitchReading = HIGH;
+int switchStableState = HIGH;
+unsigned long lastSwitchDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY_MS = 50;
+
 void setup() {
   // Hardware Serial for USB Serial Monitor debugging
   Serial.begin(9600);
@@ -71,6 +78,9 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
+  // Manual switch pin with internal pullup
+  pinMode(PIN_MANUAL_SWITCH, INPUT_PULLUP);
+
   // Initialize Servo
   valveServo.attach(PIN_SERVO);
   valveServo.write(VALVE_OPEN_ANGLE); // Start in OPEN position
@@ -79,20 +89,47 @@ void setup() {
   Serial.println(F("=================================================="));
   Serial.println(F(" PipelineGuard: Arduino Gas & Flame Controller   "));
   Serial.println(F(" Valve Servo: 0 deg (OPEN) -> 180 deg (CLOSED)   "));
+  Serial.println(F(" Manual Switch: Pin 4 to GND (Active LOW)        "));
   Serial.println(F("=================================================="));
   delay(1500); // Allow sensor heater to stabilize
 }
 
 void loop() {
-  // 1. Read MQ-2 Sensor (0 - 1023 on Arduino ADC)
+  // 1. Read Manual Switch with Debouncing
+  int switchReading = digitalRead(PIN_MANUAL_SWITCH);
+  if (switchReading != lastSwitchReading) {
+    lastSwitchDebounceTime = millis();
+  }
+
+  if ((millis() - lastSwitchDebounceTime) > DEBOUNCE_DELAY_MS) {
+    if (switchReading != switchStableState) {
+      switchStableState = switchReading;
+      if (switchStableState == LOW) {
+        if (isValveClosed) {
+          valveServo.write(VALVE_OPEN_ANGLE);
+          isValveClosed = false;
+          digitalWrite(PIN_BUZZER, LOW);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 0° (OPEN)"));
+        } else {
+          valveServo.write(VALVE_CLOSED_ANGLE);
+          isValveClosed = true;
+          digitalWrite(PIN_BUZZER, HIGH);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 180° (CLOSED)"));
+        }
+      }
+    }
+  }
+  lastSwitchReading = switchReading;
+
+  // 2. Read MQ-2 Sensor (0 - 1023 on Arduino ADC)
   int rawGas = analogRead(PIN_MQ2);
   // Scale 0-1023 to 0-1000 index
   float gasLevel = (float)rawGas * (1000.0 / 1023.0);
 
-  // 2. Read Flame Sensor (Typical modules output LOW when flame detected)
+  // 3. Read Flame Sensor (Typical modules output LOW when flame detected)
   bool flameDetected = (digitalRead(PIN_FLAME) == LOW);
 
-  // 3. Logic: Check for Gas Leakage (> 300) OR Flame Event
+  // 4. Logic: Check for Gas Leakage (> 300) OR Flame Event
   bool hazardDetected = (gasLevel > GAS_THRESHOLD) || flameDetected;
 
   if (hazardDetected) {
@@ -105,17 +142,36 @@ void loop() {
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
     }
-  } else {
-    // Normal operation: keep valve open
+  } else if (!isValveClosed) {
     digitalWrite(PIN_BUZZER, LOW);
-    if (isValveClosed) {
-      Serial.println(F("[STATUS] Environment safe. Resetting valve to 0° (OPEN)."));
-      valveServo.write(VALVE_OPEN_ANGLE);
-      isValveClosed = false;
-    }
   }
 
-  // 4. Send Periodic Telemetry to ESP32
+  // 5. Remote Commands from Hardware Serial or ESP32 SoftwareSerial
+  auto handleCmd = [](String cmd) {
+    cmd.trim();
+    if (cmd == "SHUTOFF" || cmd == "OFF" || cmd == "CLOSE") {
+      valveServo.write(VALVE_CLOSED_ANGLE);
+      isValveClosed = true;
+      digitalWrite(PIN_BUZZER, HIGH);
+    } else if (cmd == "OPEN" || cmd == "ON") {
+      valveServo.write(VALVE_OPEN_ANGLE);
+      isValveClosed = false;
+      digitalWrite(PIN_BUZZER, LOW);
+    } else if (cmd == "TOGGLE") {
+      isValveClosed = !isValveClosed;
+      valveServo.write(isValveClosed ? VALVE_CLOSED_ANGLE : VALVE_OPEN_ANGLE);
+      digitalWrite(PIN_BUZZER, isValveClosed ? HIGH : LOW);
+    }
+  };
+
+  if (Serial.available() > 0) {
+    handleCmd(Serial.readStringUntil('\n'));
+  }
+  if (espSerial.available() > 0) {
+    handleCmd(espSerial.readStringUntil('\n'));
+  }
+
+  // 6. Send Periodic Telemetry to ESP32 and Serial Monitor
   if (millis() - lastTelemetryTime >= TELEMETRY_INTERVAL) {
     lastTelemetryTime = millis();
 
@@ -124,17 +180,21 @@ void loop() {
     Serial.print(gasLevel, 1);
     Serial.print(F(" | Flame: "));
     Serial.print(flameDetected ? F("YES") : F("NO"));
+    Serial.print(F(" | Manual Switch: "));
+    Serial.print(switchReading == LOW ? F("ON") : F("OFF"));
     Serial.print(F(" | Valve Angle: "));
     Serial.println(isValveClosed ? 180 : 0);
 
     // Send formatted line to ESP32 over SoftwareSerial
-    // Format: GAS,FLAME,VALVE_CLOSED (e.g. "320.5,1,1\n")
+    // Format: GAS,FLAME,VALVE_CLOSED,MANUAL_SWITCH (e.g. "320.5,1,1,0\n")
     espSerial.print(gasLevel, 1);
     espSerial.print(F(","));
     espSerial.print(flameDetected ? 1 : 0);
     espSerial.print(F(","));
-    espSerial.println(isValveClosed ? 1 : 0);
+    espSerial.print(isValveClosed ? 1 : 0);
+    espSerial.print(F(","));
+    espSerial.println(switchReading == LOW ? 1 : 0);
   }
 
-  delay(100);
+  delay(50);
 }

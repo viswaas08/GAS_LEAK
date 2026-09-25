@@ -26,7 +26,7 @@ def _zone_out(db: Session, zone: models.Zone) -> schemas.ZoneOut:
                   .order_by(models.SensorReading.created_at.desc()).first())
     status = models.PipelineStatus.OFFLINE if not online else (latest.status if latest else models.PipelineStatus.SAFE)
     latest_out = None
-    if latest:
+    if online and latest:
         latest_out = schemas.LatestReading(
             mq2=latest.mq2, mq135=latest.mq135, pressure=latest.pressure,
             flame_detected=latest.flame_detected, created_at=latest.created_at,
@@ -67,6 +67,8 @@ def create_zone(req: schemas.ZoneCreate, db: Session = Depends(get_db),
         db.refresh(device)
     zone = models.Zone(name=req.name, location=req.location, device_id=device.id)
     db.add(zone)
+    db.add(models.AuditLog(user_id=user.id, module="ZONES", action="ZONE_CREATED",
+                            detail=f"zone={zone.name} device={req.device_code}"))
     db.commit()
     db.refresh(zone)
     return _zone_out(db, zone)
@@ -86,7 +88,7 @@ def assign_user(zone_id: str, req: schemas.ZoneAssignUser, db: Session = Depends
     if exists:
         return {"detail": "Already assigned"}
     db.add(models.UserZone(user_id=req.user_id, zone_id=zone_id))
-    db.add(models.AuditLog(user_id=user.id, action="ZONE_USER_ASSIGNED",
+    db.add(models.AuditLog(user_id=user.id, module="ZONES", action="ZONE_USER_ASSIGNED",
                             detail=f"zone={zone.name} user={target.email}"))
     db.commit()
     return {"detail": "Assigned"}
@@ -98,6 +100,8 @@ def zone_readings(zone_id: str, limit: int = 60, db: Session = Depends(get_db),
     zone = db.query(models.Zone).filter(models.Zone.id == zone_id).first()
     if not zone or not zone.device:
         raise HTTPException(404, "Zone or device not found")
+    if not _is_online(zone.device):
+        return []  # Telemetry data not available when device is offline
     rows = (db.query(models.SensorReading)
             .filter(models.SensorReading.device_id == zone.device.id)
             .order_by(models.SensorReading.created_at.desc()).limit(limit).all())

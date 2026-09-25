@@ -134,6 +134,11 @@ class ShutoffCommand(BaseModel):
     confirm: bool = Field(..., description="Must be true — UI must show a confirmation dialog first")
 
 
+class ValveControlCommand(BaseModel):
+    zone_id: str
+    target_state: str = Field(..., description="OPEN (valve ON / 0 deg) or CLOSED (valve OFF / 180 deg)")
+
+
 class ValveStatusOut(BaseModel):
     zone_id: str
     valve_state: ValveState

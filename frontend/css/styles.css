@@ -589,3 +589,509 @@ button { font-family: inherit; }
   .landing-nav { padding: 14px 20px; }
   .hero h1 { font-size: 34px; }
 }
+
+/* ============================================================
+   PASSWORD TOGGLE & MODULE AUDIT TRAIL SYSTEM
+   ============================================================ */
+
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 44px !important;
+}
+.btn-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  padding: 6px;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+  z-index: 2;
+}
+.btn-password-toggle:hover {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.12);
+}
+.btn-password-toggle:focus {
+  outline: none;
+  color: var(--cyan);
+}
+.btn-password-toggle svg {
+  display: block;
+}
+
+.audit-modal-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.audit-notice-banner {
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: var(--radius-m);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-1);
+}
+
+.audit-notice-banner .icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.audit-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.audit-module-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all .2s ease;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.audit-module-card:hover {
+  background: var(--bg-3);
+  border-color: var(--cyan);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(6, 182, 212, 0.15);
+}
+
+.audit-module-card.active {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+}
+
+.audit-module-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.audit-module-icon {
+  font-size: 20px;
+}
+
+.audit-module-badge {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-1);
+}
+
+.audit-module-card.active .audit-module-badge {
+  background: var(--cyan);
+  color: #041017;
+}
+
+.audit-module-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-0);
+  line-height: 1.3;
+}
+
+.audit-module-desc {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.audit-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+}
+
+.audit-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-0);
+}
+
+.audit-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 260px;
+}
+
+.audit-search-bar input {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  color: var(--text-0);
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  width: 100%;
+}
+
+.audit-search-bar input:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.audit-table-wrap {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.audit-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-strong);
+  z-index: 10;
+}
+
+.audit-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.audit-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.audit-action-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.3px;
+}
+
+.audit-chip-auth { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+.audit-chip-actuator { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.audit-chip-incidents { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.audit-chip-zones { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.audit-chip-sensors { background: rgba(6, 182, 212, 0.15); color: #22D3EE; border: 1px solid rgba(6, 182, 212, 0.3); }
+.audit-chip-simulation { background: rgba(234, 179, 8, 0.15); color: #FACC15; border: 1px solid rgba(234, 179, 8, 0.3); }
+.audit-chip-system { background: rgba(148, 163, 184, 0.15); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
+
+.audit-unselected-box {
+  padding: 36px 20px;
+  text-align: center;
+  background: var(--bg-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-m);
+  color: var(--text-2);
+}
+
+.side-module-audit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-mod-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all .2s ease;
+}
+
+.side-mod-btn:hover {
+  background: var(--bg-2);
+  border-color: rgba(6, 182, 212, 0.4);
+  transform: translateX(2px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.side-mod-btn .mod-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-2);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line);
+}
+
+.side-mod-btn:hover .mod-icon {
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.side-mod-btn .mod-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-mod-btn .mod-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin-bottom: 2px;
+}
+
+.side-mod-btn .mod-tag {
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-mod-btn .mod-arrow {
+  color: var(--text-dim);
+  font-size: 12px;
+  transition: transform .15s ease, color .15s ease;
+}
+
+.side-mod-btn:hover .mod-arrow {
+  color: var(--cyan);
+  transform: translateX(3px);
+}
+
+/* Offline Safety Lock Banner */
+.offline-lock-banner {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-m);
+  padding: 10px 14px;
+  color: #FCA5A5;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+  line-height: 1.4;
+}
+
+.offline-lock-banner .lock-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Manual Valve Switch Card */
+.manual-valve-control-card {
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  padding: 14px 16px;
+  margin: 14px 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: border-color .2s ease;
+}
+
+.manual-valve-control-card.online {
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.05);
+}
+
+.manual-valve-control-card.offline {
+  opacity: 0.55;
+  border-color: rgba(239, 68, 68, 0.25);
+  cursor: not-allowed;
+}
+
+.manual-valve-info {
+  flex: 1;
+}
+
+.manual-valve-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-valve-sub {
+  font-size: 11.5px;
+  color: var(--text-2);
+  line-height: 1.35;
+}
+
+.manual-valve-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* High-tech Toggle Switch */
+.valve-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.valve-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.valve-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #334155;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.valve-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 3px;
+  background-color: #94A3B8;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+/* Checked = ON (0° OPEN) */
+.valve-toggle-switch input:checked + .valve-toggle-slider {
+  background-color: #10B981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.valve-toggle-switch input:checked + .valve-toggle-slider:before {
+  transform: translateX(24px);
+  background-color: #FFFFFF;
+}
+
+/* Unchecked = OFF (180° CLOSED / SHUTOFF) */
+.valve-toggle-switch input:not(:checked) + .valve-toggle-slider {
+  background-color: #EF4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.valve-toggle-switch input:not(:checked) + .valve-toggle-slider:before {
+  background-color: #FFFFFF;
+}
+
+.valve-toggle-switch input:disabled + .valve-toggle-slider {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+  cursor: not-allowed;
+  box-shadow: none !important;
+}
+
+.valve-toggle-switch input:disabled + .valve-toggle-slider:before {
+  background-color: #475569 !important;
+}
+
+.valve-toggle-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  min-width: 120px;
+}
+
+.metric-value.no-data {
+  color: var(--text-2) !important;
+  font-size: 14px !important;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.chart-offline-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(3px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 5;
+  border-radius: var(--radius-m);
+}
+
+

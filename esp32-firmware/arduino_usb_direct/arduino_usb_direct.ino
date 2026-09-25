@@ -38,10 +38,11 @@
 #include <Servo.h>
 
 // ================= PIN CONFIGURATION =================
-const int PIN_MQ2    = A0;  // MQ-2 Analog Out (A0)
-const int PIN_FLAME  = 2;   // Flame Sensor Digital Out (D0) -> Digital Pin 2
-const int PIN_SERVO  = 9;   // Servo Motor Signal (Orange/Yellow) -> Digital Pin 9
-const int PIN_BUZZER = 8;   // Buzzer / Alert LED (+) -> Digital Pin 8
+const int PIN_MQ2           = A0; // MQ-2 Analog Out (A0)
+const int PIN_FLAME         = 2;  // Flame Sensor Digital Out (D0) -> Digital Pin 2
+const int PIN_SERVO         = 9;  // Servo Motor Signal (Orange/Yellow) -> Digital Pin 9
+const int PIN_BUZZER        = 8;  // Buzzer / Alert LED (+) -> Digital Pin 8
+const int PIN_MANUAL_SWITCH = 4;  // Manual Push Button / Switch (Pin 4 to GND with internal pullup)
 
 // ================= SENSOR CALIBRATION =================
 // Baseline clean-air ADC reading for MQ-2 (typically 80-130 in clean ambient air)
@@ -57,6 +58,12 @@ Servo valveServo;
 bool isValveClosed = false;
 unsigned long lastSend = 0;
 
+// Manual switch state & debounce
+int lastSwitchReading = HIGH;
+int switchStableState = HIGH;
+unsigned long lastSwitchDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY_MS = 50;
+
 void setup() {
   // 9600 baud rate matching python bridge
   Serial.begin(9600);
@@ -66,13 +73,45 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
+  // Manual hardware switch pin (active LOW when button pressed / switch to GND)
+  pinMode(PIN_MANUAL_SWITCH, INPUT_PULLUP);
+
   valveServo.attach(PIN_SERVO);
   valveServo.write(VALVE_OPEN_ANGLE);
   isValveClosed = false;
 }
 
 void loop() {
-  // 1. Read MQ-2 Sensor with 8x Oversampling for stable, noise-free readings
+  // 1. Read Manual Switch with Debouncing (Pin 4 to GND)
+  int switchReading = digitalRead(PIN_MANUAL_SWITCH);
+  if (switchReading != lastSwitchReading) {
+    lastSwitchDebounceTime = millis();
+  }
+
+  if ((millis() - lastSwitchDebounceTime) > DEBOUNCE_DELAY_MS) {
+    if (switchReading != switchStableState) {
+      switchStableState = switchReading;
+      // Trigger toggle when switch transition to active (LOW = pressed/on)
+      if (switchStableState == LOW) {
+        if (isValveClosed) {
+          // Manual Switch turned ON -> Open valve (0°)
+          valveServo.write(VALVE_OPEN_ANGLE);
+          isValveClosed = false;
+          digitalWrite(PIN_BUZZER, LOW);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 0° (OPEN)"));
+        } else {
+          // Manual Switch turned OFF -> Shut off valve (180°)
+          valveServo.write(VALVE_CLOSED_ANGLE);
+          isValveClosed = true;
+          digitalWrite(PIN_BUZZER, HIGH);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 180° (CLOSED)"));
+        }
+      }
+    }
+  }
+  lastSwitchReading = switchReading;
+
+  // 2. Read MQ-2 Sensor with 8x Oversampling for stable, noise-free readings
   long adcSum = 0;
   for (int i = 0; i < 8; i++) {
     adcSum += analogRead(PIN_MQ2);
@@ -89,12 +128,12 @@ void loop() {
     gasLevel = (rawGas / (float)CLEAN_AIR_BASELINE) * 12.0;
   }
 
-  // 2. Read Flame Sensor (D0 on Pin 2)
+  // 3. Read Flame Sensor (D0 on Pin 2)
   // Standard IR flame sensor modules output LOW when flame IR is sensed (Active LOW)
   int flamePinState = digitalRead(PIN_FLAME);
   bool flameDetected = (flamePinState == LOW);
 
-  // 3. Local Safety Logic: Gas > 300 PPM or Flame detected -> 180° Emergency Shutoff
+  // 4. Local Safety Logic: Gas > 300 PPM or Flame detected -> 180° Emergency Shutoff
   bool localHazard = (gasLevel >= GAS_THRESHOLD) || flameDetected;
 
   if (localHazard) {
@@ -107,22 +146,26 @@ void loop() {
     digitalWrite(PIN_BUZZER, LOW);
   }
 
-  // 4. Remote Control Commands via USB Serial from Website Operator
+  // 5. Remote / Bridge Control Commands via USB Serial from Website Operator
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if (cmd == "SHUTOFF") {
+    if (cmd == "SHUTOFF" || cmd == "OFF" || cmd == "CLOSE") {
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
       digitalWrite(PIN_BUZZER, HIGH);
-    } else if (cmd == "OPEN") {
+    } else if (cmd == "OPEN" || cmd == "ON") {
       valveServo.write(VALVE_OPEN_ANGLE);
       isValveClosed = false;
       digitalWrite(PIN_BUZZER, LOW);
+    } else if (cmd == "TOGGLE") {
+      isValveClosed = !isValveClosed;
+      valveServo.write(isValveClosed ? VALVE_CLOSED_ANGLE : VALVE_OPEN_ANGLE);
+      digitalWrite(PIN_BUZZER, isValveClosed ? HIGH : LOW);
     }
   }
 
-  // 5. Stream Structured Telemetry JSON to PC every 0.1 seconds (100ms = 10Hz)
+  // 6. Stream Structured Telemetry JSON to PC every 0.1 seconds (100ms = 10Hz)
   if (millis() - lastSend >= 100) {
     lastSend = millis();
 
@@ -136,6 +179,8 @@ void loop() {
     Serial.print(flamePinState);
     Serial.print(",\"valve_closed\":");
     Serial.print(isValveClosed ? "true" : "false");
+    Serial.print(",\"manual_switch\":");
+    Serial.print(switchReading == LOW ? "true" : "false");
     Serial.println("}");
   }
 

@@ -12,8 +12,8 @@ from ..security import hash_password, verify_password, hash_otp, create_access_t
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def log_audit(db: Session, user_id: str, action: str, detail: str = ""):
-    db.add(models.AuditLog(user_id=user_id, action=action, detail=detail))
+def log_audit(db: Session, user_id: str, action: str, detail: str = "", module: str = "AUTH"):
+    db.add(models.AuditLog(user_id=user_id, module=module, action=action, detail=detail))
     db.commit()
 
 

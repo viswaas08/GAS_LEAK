@@ -3,12 +3,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from .database import Base, engine
+from sqlalchemy import text
+from .database import Base, engine, is_sqlite
 from .config import settings
 from .websocket_manager import manager
 from .routers import auth, zones, sensors, incidents, actuator, simulation, audit
 
 Base.metadata.create_all(bind=engine)
+try:
+    with engine.begin() as conn:
+        if is_sqlite:
+            res = conn.execute(text("PRAGMA table_info(audit_logs)")).fetchall()
+            cols = [r[1] for r in res]
+            if "module" not in cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN module VARCHAR DEFAULT 'SYSTEM'"))
+        else:
+            conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS module VARCHAR DEFAULT 'SYSTEM'"))
+except Exception as _mig_err:
+    pass
+
 try:
     from . import seed
     seed.run()

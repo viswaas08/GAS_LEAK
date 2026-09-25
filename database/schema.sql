@@ -75,6 +75,7 @@ CREATE TABLE incident_events (
 CREATE TABLE audit_logs (
     id          VARCHAR PRIMARY KEY,
     user_id     VARCHAR,
+    module      VARCHAR DEFAULT 'SYSTEM',
     action      VARCHAR NOT NULL,
     detail      TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP

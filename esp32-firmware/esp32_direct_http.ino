@@ -39,9 +39,11 @@ const char* SERVER_URL    = "http://192.168.1.100:8000/api/sensors";
 const char* DEVICE_CODE   = "ESP32-01";
 
 // 4. Pin Assignments
-const int PIN_MQ_SENSOR   = 34;   // Analog input from MQ sensor (GPIO 34)
-const int PIN_LED         = 2;    // Built-in LED on ESP32
-const int PIN_BUZZER      = 25;   // Optional buzzer pin
+const int PIN_MQ_SENSOR     = 34;   // Analog input from MQ sensor (GPIO 34)
+const int PIN_LED           = 2;    // Built-in LED on ESP32
+const int PIN_BUZZER        = 25;   // Optional buzzer pin
+const int PIN_ACTUATOR      = 26;   // Actuator / Valve Relay / Servo pin
+const int PIN_MANUAL_SWITCH = 4;    // Manual switch / Push button (Active LOW with internal pullup)
 
 // 5. Thresholds & Timing
 const float GAS_THRESHOLD = 300.0;          // Threshold specified (> 300 triggers alert)
@@ -49,6 +51,13 @@ const unsigned long SEND_INTERVAL_MS = 2000; // Send reading every 2 seconds
 // ======================================================
 
 unsigned long lastSendTime = 0;
+bool isValveClosed = false;
+
+// Manual switch debounce state
+int lastSwitchReading = HIGH;
+int switchStableState = HIGH;
+unsigned long lastSwitchDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY_MS = 50;
 
 void connectWiFi() {
   Serial.println();
@@ -80,12 +89,17 @@ void setup() {
 
   Serial.println("=================================================");
   Serial.println(" PipelineGuard — ESP32 WROOM-32 Gas Monitor ");
+  Serial.println(" Manual Switch: Pin 4 to GND (Active LOW)        ");
   Serial.println("=================================================");
 
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_ACTUATOR, OUTPUT);
+  pinMode(PIN_MANUAL_SWITCH, INPUT_PULLUP);
+
   digitalWrite(PIN_LED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
+  digitalWrite(PIN_ACTUATOR, LOW); // Start OPEN
 
   // ADC resolution to 12-bit (0-4095)
   analogReadResolution(12);
@@ -135,6 +149,30 @@ void sendReadingToWebsite(float gasValue, float airQualityValue, float pressureV
 }
 
 void loop() {
+  // 1. Read Manual Switch with Debouncing
+  int switchReading = digitalRead(PIN_MANUAL_SWITCH);
+  if (switchReading != lastSwitchReading) {
+    lastSwitchDebounceTime = millis();
+  }
+  if ((millis() - lastSwitchDebounceTime) > DEBOUNCE_DELAY_MS) {
+    if (switchReading != switchStableState) {
+      switchStableState = switchReading;
+      if (switchStableState == LOW) {
+        // Toggle valve
+        isValveClosed = !isValveClosed;
+        digitalWrite(PIN_ACTUATOR, isValveClosed ? HIGH : LOW);
+        if (isValveClosed) {
+          digitalWrite(PIN_BUZZER, HIGH);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve CLOSED (180° / Relayed OFF)"));
+        } else {
+          digitalWrite(PIN_BUZZER, LOW);
+          Serial.println(F("[MANUAL SWITCH] Toggled -> Valve OPEN (0° / Normal)"));
+        }
+      }
+    }
+  }
+  lastSwitchReading = switchReading;
+
   // Ensure Wi-Fi is connected
   if (WiFi.status() != WL_CONNECTED) {
     delay(1000);
@@ -146,40 +184,43 @@ void loop() {
   if (currentMillis - lastSendTime >= SEND_INTERVAL_MS) {
     lastSendTime = currentMillis;
 
-    // 1. Read Analog Pin (0 - 4095 on ESP32)
+    // 2. Read Analog Pin (0 - 4095 on ESP32)
     int rawValue = analogRead(PIN_MQ_SENSOR);
 
-    // 2. Scale raw 12-bit ADC (0-4095) to calibrated index (0-1000)
-    // You can adjust the formula based on your sensor calibration
+    // 3. Scale raw 12-bit ADC (0-4095) to calibrated index (0-1000)
     float gasLevel = (float)rawValue * (1000.0 / 4095.0);
 
     // Simulated secondary readings if only 1 physical sensor is attached
     float airQuality = gasLevel * 0.85; 
-    float normalPressure = 1.02; // bar
+    float normalPressure = isValveClosed ? 0.2 : 1.02; // bar
     bool flameDetected = false;
 
-    // 3. Print Data to Serial Monitor
+    // 4. Print Data to Serial Monitor
     Serial.println("-------------------------------------------------");
     Serial.print("Raw ADC: ");
     Serial.print(rawValue);
     Serial.print(" | Gas Level: ");
-    Serial.println(gasLevel);
+    Serial.print(gasLevel);
+    Serial.print(" | Valve: ");
+    Serial.println(isValveClosed ? "CLOSED" : "OPEN");
 
-    // 4. Threshold check: Greater than 300
+    // 5. Threshold check: Greater than 300
     if (gasLevel > GAS_THRESHOLD) {
       Serial.println(">>> [ALERT] GAS LEVEL > 300 DETECTED! <<<");
-      Serial.println(">>> Triggering Alarm & Alerting Dashboard! <<<");
+      Serial.println(">>> Triggering Alarm & Closing Valve! <<<");
 
-      // Visual/Audible alert
       digitalWrite(PIN_LED, HIGH);
       digitalWrite(PIN_BUZZER, HIGH);
-    } else {
-      Serial.println("[STATUS] Gas level normal (< 300).");
+      if (!isValveClosed) {
+        isValveClosed = true;
+        digitalWrite(PIN_ACTUATOR, HIGH);
+      }
+    } else if (!isValveClosed) {
       digitalWrite(PIN_LED, LOW);
       digitalWrite(PIN_BUZZER, LOW);
     }
 
-    // 5. Send data to website backend
+    // 6. Send data to website backend
     sendReadingToWebsite(gasLevel, airQuality, normalPressure, flameDetected);
   }
 }

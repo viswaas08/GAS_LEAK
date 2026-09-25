@@ -93,7 +93,8 @@ def extract_telemetry(buffer: str):
                 valve_closed = bool(data.get("valve_closed", False) or data.get("valve", 0) == 180)
                 raw_gas = data.get("raw_gas")
                 flame_pin = data.get("flame_pin")
-                return mq2, flame, valve_closed, raw_gas, flame_pin, remainder
+                manual_sw = bool(data.get("manual_switch", False) or data.get("manual", False))
+                return mq2, flame, valve_closed, raw_gas, flame_pin, manual_sw, remainder
             except Exception:
                 pass
 
@@ -102,10 +103,10 @@ def extract_telemetry(buffer: str):
     if gas_match:
         mq2 = float(gas_match.group(1))
         flame = bool(re.search(r'flame[:= ]*(yes|true|1)', buffer, re.I))
-        valve_closed = bool(re.search(r'valve[:= ]*(closed|180|true|1)', buffer, re.I))
-        # Clear buffer past the match
+        valve_closed = bool(re.search(r'valve[:= ]*(closed|180|true|1|off)', buffer, re.I))
+        manual_sw = bool(re.search(r'manual[:= ]*(yes|true|1)', buffer, re.I))
         remainder = buffer[gas_match.end():]
-        return mq2, flame, valve_closed, None, None, remainder
+        return mq2, flame, valve_closed, None, None, manual_sw, remainder
 
     # 3. Try CSV line (e.g. "150.2,0,0\n")
     csv_match = re.search(r'([0-9]+(?:\.[0-9]+)?)\s*,\s*([01])\s*,\s*([01])', buffer)
@@ -114,9 +115,9 @@ def extract_telemetry(buffer: str):
         flame = (csv_match.group(2) == "1")
         valve_closed = (csv_match.group(3) == "1")
         remainder = buffer[csv_match.end():]
-        return mq2, flame, valve_closed, None, None, remainder
+        return mq2, flame, valve_closed, None, None, False, remainder
 
-    return None, None, None, None, None, buffer
+    return None, None, None, None, None, False, buffer
 
 
 def main():
@@ -160,7 +161,7 @@ def main():
                 if len(rx_buffer) > 2048:
                     rx_buffer = rx_buffer[-512:]
 
-                mq2, flame, valve_closed, raw_gas, flame_pin, rx_buffer = extract_telemetry(rx_buffer)
+                mq2, flame, valve_closed, raw_gas, flame_pin, manual_sw, rx_buffer = extract_telemetry(rx_buffer)
 
                 if mq2 is not None:
                     current_time = time.time()
@@ -169,12 +170,15 @@ def main():
                         last_post_time = current_time
 
                         hazard_str = "🚨 HAZARD!" if (mq2 >= 300 or flame) else "✅ SAFE"
-                        valve_str = "180° CLOSED" if valve_closed else "0° OPEN"
+                        valve_str = "180° CLOSED (OFF)" if valve_closed else "0° OPEN (ON)"
                         ts = datetime.now().strftime('%H:%M:%S.%f')[:-4]
                         
                         extra_info = ""
                         if raw_gas is not None:
                             extra_info = f" (ADC: {raw_gas} | D2: {flame_pin})"
+                        if manual_sw:
+                            extra_info += " [🔘 MANUAL SWITCH TRIGGERED]"
+
                         print(f"[{ts}] {hazard_str} Gas: {mq2:.1f} PPM{extra_info} | Flame: {flame} | Valve: {valve_str}")
 
                         # Post reading to website backend
@@ -183,13 +187,13 @@ def main():
                         )
                         print(f"           ➔ Website Response: Status={server_status} | Remote Valve={valve_cmd}")
 
-                        # Remote website control: if operator clicked "Emergency shutoff"
+                        # Remote website control: if operator clicked "Emergency shutoff" or manual switch
                         if valve_cmd in ("COMMAND_SENT", "CLOSED") and not valve_closed:
-                            print("           ➔ [COMMAND] Sending SHUTOFF to Arduino Servo over USB!")
+                            print("           ➔ [COMMAND] Remote Switch OFF / Shutoff ➔ Arduino Servo 180° CLOSED!")
                             ser.write(b"SHUTOFF\n")
                             ser.flush()
                         elif valve_cmd == "OPEN" and valve_closed:
-                            print("           ➔ [COMMAND] Sending OPEN to Arduino Servo over USB!")
+                            print("           ➔ [COMMAND] Remote Switch ON / Open ➔ Arduino Servo 0° OPEN!")
                             ser.write(b"OPEN\n")
                             ser.flush()
 

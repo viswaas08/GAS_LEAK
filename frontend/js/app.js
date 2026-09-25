@@ -34,6 +34,23 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+function setupPasswordToggle(inputEl, btnEl) {
+  if (!inputEl || !btnEl) return;
+  btnEl.onclick = (e) => {
+    e.preventDefault();
+    const isPass = inputEl.type === "password";
+    inputEl.type = isPass ? "text" : "password";
+    const eyeShow = btnEl.querySelector(".eye-icon-show");
+    const eyeHide = btnEl.querySelector(".eye-icon-hide");
+    if (eyeShow && eyeHide) {
+      eyeShow.style.display = isPass ? "none" : "block";
+      eyeHide.style.display = isPass ? "block" : "none";
+    }
+    btnEl.title = isPass ? "Hide password" : "Show password";
+    btnEl.setAttribute("aria-label", isPass ? "Hide password" : "Show password");
+  };
+}
+
 // ===============================================================
 // 1. LANDING PAGE
 // ===============================================================
@@ -215,12 +232,20 @@ function renderLoginForm() {
       </div>
       <div class="field">
         <label>Password</label>
-        <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        <div class="password-input-wrap">
+          <input type="password" id="login-password-input" name="password" required autocomplete="current-password" placeholder="••••••••">
+          <button type="button" class="btn-password-toggle" id="toggle-login-password" aria-label="Show password" title="Show password">
+            <svg class="eye-icon-show" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <svg class="eye-icon-hide" style="display:none;" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+          </button>
+        </div>
       </div>
       <button class="btn-primary" type="submit">Sign In to Control Room</button>
     </form>
     <div class="auth-switch">No account? <button id="go-register">Create viewer account</button></div>
   `;
+
+  setupPasswordToggle(document.getElementById("login-password-input"), document.getElementById("toggle-login-password"));
 
   const neonBtn = document.getElementById("neon-auth-login-btn");
   neonBtn.onclick = async () => {
@@ -297,11 +322,21 @@ function renderRegisterForm() {
       <div class="field"><label>Full Name</label><input name="name" placeholder="Alex Morgan" required></div>
       <div class="field"><label>Email Address</label><input type="email" name="email" placeholder="alex@company.com" required></div>
       <div class="field"><label>Phone Number (for SMS alerts)</label><input name="phone" placeholder="+919876543210" required></div>
-      <div class="field"><label>Password (min 8 characters)</label><input type="password" name="password" minlength="8" required></div>
+      <div class="field">
+        <label>Password (min 8 characters)</label>
+        <div class="password-input-wrap">
+          <input type="password" id="register-password-input" name="password" minlength="8" required placeholder="••••••••">
+          <button type="button" class="btn-password-toggle" id="toggle-register-password" aria-label="Show password" title="Show password">
+            <svg class="eye-icon-show" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <svg class="eye-icon-hide" style="display:none;" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+          </button>
+        </div>
+      </div>
       <button class="btn-primary" type="submit">Register Account</button>
     </form>
     <div class="auth-switch">Already registered? <button id="go-login">Sign in</button></div>
   `;
+  setupPasswordToggle(document.getElementById("register-password-input"), document.getElementById("toggle-register-password"));
   document.getElementById("go-login").onclick = () => renderAuth("login");
   document.getElementById("register-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -391,8 +426,65 @@ function bootDashboard() {
       </div>
       <div class="side-col">
         <div class="panel">
-          <h3>Incident Audit Trail</h3>
-          <div id="incident-list"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <h3 style="margin:0;font-size:15px;display:flex;align-items:center;gap:6px;">
+              <span>📋</span><span>Module Audit Trails</span>
+            </h3>
+            <span class="role-badge" style="background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);font-size:10px;">ISOLATED</span>
+          </div>
+          <p class="panel-desc" style="margin-bottom:12px;">
+            Audit trails are strictly separated per subsystem. Select a specific module to inspect its records:
+          </p>
+          <div class="side-module-audit-grid" id="side-module-buttons">
+            <button class="side-mod-btn" data-mod="AUTH" type="button">
+              <span class="mod-icon">🔐</span>
+              <div class="mod-info">
+                <span class="mod-name">Authentication</span>
+                <span class="mod-tag">Logins & User Registrations</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+            <button class="side-mod-btn" data-mod="ACTUATOR" type="button">
+              <span class="mod-icon">🚨</span>
+              <div class="mod-info">
+                <span class="mod-name">Actuator & Valve</span>
+                <span class="mod-tag">180° Emergency Shutoff & Switches</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+            <button class="side-mod-btn" data-mod="INCIDENTS" type="button">
+              <span class="mod-icon">⚠️</span>
+              <div class="mod-info">
+                <span class="mod-name">Hazard Incidents</span>
+                <span class="mod-tag">Gas Leaks, Flames & Acknowledgments</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+            <button class="side-mod-btn" data-mod="ZONES" type="button">
+              <span class="mod-icon">🏭</span>
+              <div class="mod-info">
+                <span class="mod-name">Pipeline Zones</span>
+                <span class="mod-tag">Zone Configs & User Assignments</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+            <button class="side-mod-btn" data-mod="SENSORS" type="button">
+              <span class="mod-icon">📡</span>
+              <div class="mod-info">
+                <span class="mod-name">Sensors & Telemetry</span>
+                <span class="mod-tag">Inbound Telemetry Streams</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+            <button class="side-mod-btn" data-mod="SIMULATION" type="button">
+              <span class="mod-icon">⚙️</span>
+              <div class="mod-info">
+                <span class="mod-name">System & Simulation</span>
+                <span class="mod-tag">Simulated Injections & Maintenance</span>
+              </div>
+              <span class="mod-arrow">➔</span>
+            </button>
+          </div>
         </div>
         <div id="admin-panel-container"></div>
       </div>
@@ -407,6 +499,12 @@ function bootDashboard() {
     if (state.ws) state.ws.close();
     renderLandingPage();
   };
+
+  document.querySelectorAll(".side-mod-btn").forEach(btn => {
+    btn.onclick = () => {
+      openAuditModal(btn.dataset.mod);
+    };
+  });
 
   loadZonesAndIncidents();
   startSubsecondEngine();
@@ -445,7 +543,6 @@ async function loadZonesAndIncidents() {
 
     renderSummary();
     renderZoneGrid();
-    renderIncidentList();
     renderAdminPanel();
 
     if (state.selectedZoneId) {
@@ -476,17 +573,13 @@ function renderSummary() {
       <span><b>${counts.OFFLINE}</b> offline</span>
     </div>
     <div class="topbar-spacer"></div>
-    <button class="btn-ghost" id="export-csv-btn">Export Audit CSV</button>
+    <button class="btn-ghost" id="open-audit-nav-btn" style="display:flex;align-items:center;gap:6px;">
+      <span>📋</span><span>Module Audit Logs</span>
+    </button>
   `;
 
-  document.getElementById("export-csv-btn").onclick = () => {
-    fetch("/api/incidents/export.csv", { headers: { Authorization: `Bearer ${API.getToken()}` } })
-      .then(r => r.blob()).then(b => {
-        const url = URL.createObjectURL(b);
-        const a = document.createElement("a");
-        a.href = url; a.download = "pipeline_incidents.csv"; a.click();
-        URL.revokeObjectURL(url);
-      });
+  document.getElementById("open-audit-nav-btn").onclick = () => {
+    openAuditModal();
   };
 }
 
@@ -508,37 +601,49 @@ function renderZoneGrid() {
 
   // Update in place or re-render
   grid.innerHTML = state.zones.map(z => {
-    const isHazard = z.status === "WARNING" || z.status === "CRITICAL";
+    const isOnline = Boolean(z.device_online);
+    const isHazard = isOnline && (z.status === "WARNING" || z.status === "CRITICAL");
+    const displayStatus = isOnline ? z.status : "OFFLINE";
+    const statusClass = isOnline ? z.status : "CRITICAL";
+
+    const mq2Val = isOnline && z.latest ? z.latest.mq2.toFixed(0) : "NO DATA";
+    const mq135Val = isOnline && z.latest ? z.latest.mq135.toFixed(0) : "NO DATA";
+    const flameVal = isOnline && z.latest ? (z.latest.flame_detected ? "FIRE!" : "Clear") : "NO DATA";
+    const isFlameCrit = isOnline && z.latest?.flame_detected;
+    const isGasCrit = isOnline && (z.latest?.mq2 > 300);
+
     return `
-      <div class="zone-card" data-status="${z.status}" data-zone-id="${z.id}" style="${isHazard ? 'border-color:var(--crit);box-shadow:0 0 20px var(--crit-glow);' : ''}">
+      <div class="zone-card" data-status="${statusClass}" data-zone-id="${z.id}" style="${isHazard ? 'border-color:var(--crit);box-shadow:0 0 20px var(--crit-glow);' : (!isOnline ? 'border-color:rgba(239,68,68,0.3);opacity:0.88;' : '')}">
         <div class="zone-card-top">
           <div>
             <div class="zone-name">${escapeHtml(z.name)}</div>
             <div class="zone-loc">${escapeHtml(z.location || "Main Line")} · ${escapeHtml(z.device_code || "ESP32-01")}</div>
           </div>
-          <span class="status-badge ${z.status}"><span class="dot"></span>${z.status}</span>
+          <span class="status-badge ${isOnline ? z.status : 'CRITICAL'}" style="${!isOnline ? 'background:rgba(239,68,68,0.15);color:#FCA5A5;border-color:rgba(239,68,68,0.3);' : ''}">
+            <span class="dot" style="${!isOnline ? 'background:#EF4444;' : ''}"></span>${displayStatus}
+          </span>
         </div>
         <div class="zone-metrics">
           <div class="metric">
             <div class="metric-label">MQ-2 Gas</div>
-            <div class="metric-value" style="${(z.latest?.mq2 > 300) ? 'color:var(--crit);font-weight:800;' : ''}">${z.latest ? z.latest.mq2.toFixed(0) : "—"}</div>
+            <div class="metric-value ${!isOnline ? 'no-data' : ''}" style="${isGasCrit ? 'color:var(--crit);font-weight:800;' : ''}">${mq2Val}</div>
           </div>
           <div class="metric">
             <div class="metric-label">MQ-135</div>
-            <div class="metric-value">${z.latest ? z.latest.mq135.toFixed(0) : "—"}</div>
+            <div class="metric-value ${!isOnline ? 'no-data' : ''}">${mq135Val}</div>
           </div>
           <div class="metric">
             <div class="metric-label">Flame</div>
-            <div class="metric-value" style="${z.latest?.flame_detected ? 'color:var(--crit);font-weight:800;' : ''}">${z.latest ? (z.latest.flame_detected ? "FIRE!" : "Clear") : "—"}</div>
+            <div class="metric-value ${!isOnline ? 'no-data' : ''}" style="${isFlameCrit ? 'color:var(--crit);font-weight:800;' : ''}">${flameVal}</div>
           </div>
         </div>
         <div class="zone-foot">
           <span style="display:flex;align-items:center;gap:6px;">
-            <span class="pulse-dot" style="background:${z.device_online ? 'var(--safe)' : 'var(--text-dim)'};"></span>
-            ${z.device_online ? "0.1s Streaming" : "offline"}
+            <span class="pulse-dot" style="background:${isOnline ? 'var(--safe)' : '#EF4444'};"></span>
+            ${isOnline ? "0.1s Streaming" : "Hardware Offline"}
           </span>
-          <span class="valve-tag ${z.valve_state === 'CLOSED' ? 'CLOSED' : ''}">
-            VALVE: ${z.valve_state}
+          <span class="valve-tag ${!isOnline ? '' : (z.valve_state === 'CLOSED' ? 'CLOSED' : '')}" style="${!isOnline ? 'background:rgba(100,116,139,0.2);color:#94A3B8;border:1px solid rgba(148,163,184,0.3);' : ''}">
+            ${isOnline ? `VALVE: ${z.valve_state}` : "VALVE: LOCKED"}
           </span>
         </div>
       </div>
@@ -548,28 +653,6 @@ function renderZoneGrid() {
   grid.querySelectorAll(".zone-card").forEach(card => {
     card.onclick = () => openZoneDetail(card.dataset.zoneId);
   });
-}
-
-function renderIncidentList() {
-  const list = document.getElementById("incident-list");
-  if (!list) return;
-  const items = state.incidents.slice(0, 6);
-  if (!items.length) {
-    list.innerHTML = `<div style="font-size:12.5px;color:var(--text-2);padding:8px 0;">No active safety incidents recorded.</div>`;
-    return;
-  }
-  list.innerHTML = items.map(inc => {
-    const dotColor = inc.status === "CRITICAL" ? "var(--crit)" : inc.status === "WARNING" ? "var(--warn)" : "var(--safe)";
-    return `
-      <div class="incident-item">
-        <div class="incident-dot" style="background:${dotColor};box-shadow:0 0 6px ${dotColor};"></div>
-        <div style="flex:1;">
-          <div style="font-weight:600;font-size:13px;color:var(--text-0);">${escapeHtml(inc.status)}: ${escapeHtml(inc.reason)}</div>
-          <div class="incident-time">${new Date(inc.created_at).toLocaleTimeString()}</div>
-        </div>
-      </div>
-    `;
-  }).join("");
 }
 
 function renderAdminPanel() {
@@ -600,7 +683,7 @@ function renderAdminPanel() {
         <h3 style="margin:0;">Mission Admin Console</h3>
         <span class="role-badge" style="background:rgba(0,229,153,0.15);color:var(--neon-brand);border:1px solid rgba(0,229,153,0.3);">ADMIN</span>
       </div>
-      <p class="panel-desc">Manage physical zones, inspect operators, and check security logs.</p>
+      <p class="panel-desc">Manage physical zones, inspect operators, and check module security logs.</p>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <button class="btn-ghost" id="admin-add-zone-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
           <span>➕</span><span>Register Pipeline Zone</span>
@@ -609,7 +692,7 @@ function renderAdminPanel() {
           <span>👥</span><span>View System Operators</span>
         </button>
         <button class="btn-ghost" id="admin-audit-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
-          <span>📋</span><span>Security Audit Logs</span>
+          <span>📋</span><span>Module-Specific Audit Trails</span>
         </button>
       </div>
     </div>
@@ -617,7 +700,7 @@ function renderAdminPanel() {
 
   document.getElementById("admin-add-zone-btn").onclick = openAddZoneModal;
   document.getElementById("admin-users-btn").onclick = openUsersModal;
-  document.getElementById("admin-audit-btn").onclick = openAuditModal;
+  document.getElementById("admin-audit-btn").onclick = () => openAuditModal();
 }
 
 // ===============================================================
@@ -649,67 +732,127 @@ function closeDetail() {
 async function renderDetailPanel(zone) {
   const panel = document.getElementById("detail-panel");
   if (!panel) return;
+  const isOnline = Boolean(zone.device_online);
   let readings = [];
-  try { readings = await API.zoneReadings(zone.id, 40); } catch {}
-  const latest = readings.length ? readings[readings.length - 1] : null;
+  if (isOnline) {
+    try { readings = await API.zoneReadings(zone.id, 40); } catch {}
+  }
+  const latest = (isOnline && readings.length) ? readings[readings.length - 1] : null;
   const incidents = state.incidents.filter(i => i.zone_id === zone.id).slice(0, 8);
+
+  const displayStatus = isOnline ? zone.status : "OFFLINE";
+  const mq2Val = (isOnline && latest) ? latest.mq2.toFixed(0) : "NO DATA";
+  const mq135Val = (isOnline && latest) ? latest.mq135.toFixed(0) : "NO DATA";
+  const presVal = (isOnline && latest) ? latest.pressure.toFixed(2) : "NO DATA";
+  let flameVal = "NO DATA";
+  if (isOnline && latest) {
+    flameVal = latest.flame_detected ? '<span style="color:var(--crit);font-weight:800;">FIRE DETECTED</span>' : "Clear";
+  }
+
+  const reasonText = isOnline 
+    ? (latest?.reason || "All readings within normal operating range") 
+    : "Hardware offline — live telemetry stream paused & controls locked";
 
   panel.innerHTML = `
     <div class="detail-head">
       <div>
         <div class="detail-title">${escapeHtml(zone.name)}</div>
-        <div style="color:var(--text-2);font-size:12.5px;margin-top:3px;">${escapeHtml(zone.location || "Main Line")} · ${escapeHtml(zone.device_code || "ESP32-01")} · 0.1s Live Sync</div>
+        <div style="color:var(--text-2);font-size:12.5px;margin-top:3px;">${escapeHtml(zone.location || "Main Line")} · ${escapeHtml(zone.device_code || "ESP32-01")} · ${isOnline ? '0.1s Live Sync' : '<span style="color:#FCA5A5;">Hardware Offline</span>'}</div>
       </div>
       <button class="close-btn" id="close-detail">✕</button>
     </div>
+
+    ${!isOnline ? `
+      <div class="offline-lock-banner">
+        <span class="lock-icon">🔒</span>
+        <div>
+          <div><b>HARDWARE OFFLINE:</b> Telemetry stream disconnected.</div>
+          <div style="font-size:11px;opacity:0.85;margin-top:2px;">No live sensor data is available, and manual/emergency valve controls are locked for safety.</div>
+        </div>
+      </div>
+    ` : ''}
     
     <div style="display:flex;align-items:center;gap:12px;margin:10px 0;">
-      <span class="status-badge ${zone.status}" id="detail-status-badge"><span class="dot"></span>${zone.status}</span>
+      <span class="status-badge ${isOnline ? zone.status : 'CRITICAL'}" id="detail-status-badge" style="${!isOnline ? 'background:rgba(239,68,68,0.15);color:#FCA5A5;border-color:rgba(239,68,68,0.3);' : ''}">
+        <span class="dot" style="${!isOnline ? 'background:#EF4444;' : ''}"></span>${displayStatus}
+      </span>
       <span style="font-size:11.5px;color:var(--cyan);background:rgba(6,182,212,0.1);padding:4px 10px;border-radius:6px;border:1px solid rgba(6,182,212,0.25);">
         Threshold: Warning &gt; 300 | Critical &gt; 600
       </span>
     </div>
 
     <div class="reason-box">
-      <b>Interception Reason:</b> <span id="detail-reason-val">${escapeHtml(latest?.reason || "All readings within normal operating range")}</span>
+      <b>Interception Reason:</b> <span id="detail-reason-val">${escapeHtml(reasonText)}</span>
     </div>
 
     <div class="detail-metrics">
       <div class="detail-metric">
         <div class="metric-label">MQ-2 Gas Level (PPM)</div>
-        <div class="metric-value" id="detail-mq2-val" style="font-size:26px;">${latest ? latest.mq2.toFixed(0) : "—"}</div>
+        <div class="metric-value ${!isOnline ? 'no-data' : ''}" id="detail-mq2-val" style="font-size:${!isOnline ? '18px' : '26px'};">${mq2Val}</div>
       </div>
       <div class="detail-metric">
         <div class="metric-label">MQ-135 Air Index</div>
-        <div class="metric-value" id="detail-mq135-val" style="font-size:26px;">${latest ? latest.mq135.toFixed(0) : "—"}</div>
+        <div class="metric-value ${!isOnline ? 'no-data' : ''}" id="detail-mq135-val" style="font-size:${!isOnline ? '18px' : '26px'};">${mq135Val}</div>
       </div>
       <div class="detail-metric">
         <div class="metric-label">Pressure (Bar)</div>
-        <div class="metric-value" id="detail-pressure-val" style="font-size:26px;">${latest ? latest.pressure.toFixed(2) : "—"}</div>
+        <div class="metric-value ${!isOnline ? 'no-data' : ''}" id="detail-pressure-val" style="font-size:${!isOnline ? '18px' : '26px'};">${presVal}</div>
       </div>
       <div class="detail-metric">
         <div class="metric-label">Optical Flame Status</div>
-        <div class="metric-value" id="detail-flame-val" style="font-size:22px;">
-          ${latest ? (latest.flame_detected ? '<span style="color:var(--crit);font-weight:800;">FIRE DETECTED</span>' : "Clear") : "—"}
+        <div class="metric-value ${!isOnline ? 'no-data' : ''}" id="detail-flame-val" style="font-size:${!isOnline ? '18px' : '22px'};">
+          ${flameVal}
         </div>
       </div>
     </div>
 
-    <div class="chart-container">
+    <div class="chart-container" style="position:relative;">
+      ${!isOnline ? `
+        <div class="chart-offline-overlay">
+          <div style="font-size:24px;margin-bottom:6px;">📡</div>
+          <div>Telemetry chart unavailable while device is offline</div>
+        </div>
+      ` : ''}
       <canvas id="zone-chart"></canvas>
+    </div>
+
+    <!-- Manual Valve Switch Control Card -->
+    <div class="manual-valve-control-card ${isOnline ? 'online' : 'offline'}">
+      <div class="manual-valve-info">
+        <div class="manual-valve-title">
+          <span>🔘 Manual Valve Switch</span>
+          <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);font-family:var(--font-mono);font-weight:600;">SERVO PIN 9 / RELAY</span>
+        </div>
+        <div class="manual-valve-sub">
+          ${isOnline 
+            ? "Toggle to manually command valve ON (0° Open) or OFF (180° Shutoff)." 
+            : "🔒 Control unavailable — Device is currently offline."}
+        </div>
+      </div>
+      <div class="manual-valve-switch-wrapper">
+        <label class="valve-toggle-switch" title="${isOnline ? 'Click to toggle valve position' : 'Valve control unavailable while offline'}">
+          <input type="checkbox" id="manual-valve-toggle" ${zone.valve_state === 'OPEN' ? 'checked' : ''} ${!isOnline ? 'disabled' : ''}>
+          <span class="valve-toggle-slider"></span>
+        </label>
+        <span class="valve-toggle-label" id="manual-valve-label" style="color: ${!isOnline ? 'var(--text-dim)' : (zone.valve_state === 'OPEN' ? 'var(--safe)' : 'var(--crit)')}; font-weight:700;">
+          ${!isOnline ? 'LOCKED (OFFLINE)' : (zone.valve_state === 'OPEN' ? 'ON (0° OPEN)' : 'OFF (180° SHUT)')}
+        </span>
+      </div>
     </div>
 
     <div class="valve-row">
       <div>
         <div class="valve-state-label">Automated 180° Valve Actuator</div>
-        <div class="valve-state-value" id="valve-state-value">${zone.valve_state}</div>
+        <div class="valve-state-value" id="valve-state-value">${isOnline ? zone.valve_state : 'LOCKED'}</div>
       </div>
-      <span style="font-size:12px;color:var(--text-2);font-family:var(--font-mono);">
-        ${zone.valve_state === 'CLOSED' ? '180° SHUT' : '0° OPEN'}
+      <span style="font-size:12px;color:var(--text-2);font-family:var(--font-mono);" id="valve-angle-value">
+        ${!isOnline ? 'OFFLINE' : (zone.valve_state === 'CLOSED' ? '180° SHUT' : '0° OPEN')}
       </span>
     </div>
 
-    <button class="btn-emergency" id="shutoff-btn">🚨 Emergency Valve Interception</button>
+    <button class="btn-emergency" id="shutoff-btn" ${!isOnline ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''} title="${isOnline ? 'Trigger emergency shutoff' : 'Valve control locked while offline'}">
+      ${isOnline ? '🚨 Emergency Valve Interception' : '🔒 Emergency Valve Interception (Offline Locked)'}
+    </button>
 
     <div style="margin-top:10px;">
       <h3 style="font-size:14px;margin-bottom:8px;font-family:var(--font-display);">Zone Incident History</h3>
@@ -718,70 +861,215 @@ async function renderDetailPanel(zone) {
   `;
 
   document.getElementById("close-detail").onclick = closeDetail;
-  document.getElementById("shutoff-btn").onclick = () => confirmShutoff(zone.id, zone.name);
+
+  const shutBtn = document.getElementById("shutoff-btn");
+  if (shutBtn && isOnline) {
+    shutBtn.onclick = () => confirmShutoff(zone.id, zone.name);
+  }
+
+  // Handle Manual Valve Switch Toggle
+  const valveToggle = document.getElementById("manual-valve-toggle");
+  if (valveToggle) {
+    valveToggle.onchange = async () => {
+      if (!zone.device_online) {
+        toast("Hardware device is offline. Valve control is not available.", "error");
+        valveToggle.checked = (zone.valve_state === "OPEN");
+        return;
+      }
+      const targetState = valveToggle.checked ? "OPEN" : "CLOSED";
+      try {
+        valveToggle.disabled = true;
+        const res = await API.setValveState(zone.id, targetState);
+        zone.valve_state = res.valve_state || targetState;
+        toast(`Manual switch: Valve commanded to ${zone.valve_state === "OPEN" ? "0° OPEN (ON)" : "180° CLOSED (OFF)"}.`, "safe");
+        
+        const lbl = document.getElementById("manual-valve-label");
+        if (lbl) {
+          lbl.textContent = zone.valve_state === "OPEN" ? "ON (0° OPEN)" : "OFF (180° SHUT)";
+          lbl.style.color = zone.valve_state === "OPEN" ? "var(--safe)" : "var(--crit)";
+        }
+        const vVal = document.getElementById("valve-state-value");
+        if (vVal) vVal.textContent = zone.valve_state;
+        const vAng = document.getElementById("valve-angle-value");
+        if (vAng) vAng.textContent = zone.valve_state === "CLOSED" ? "180° SHUT" : "0° OPEN";
+      } catch (err) {
+        toast(`Valve control failed: ${err.message}`, "error");
+        valveToggle.checked = (zone.valve_state === "OPEN");
+      } finally {
+        if (zone.device_online) valveToggle.disabled = false;
+      }
+    };
+  }
 
   renderTimeline(incidents);
-  renderChart(readings);
+  if (isOnline) {
+    renderChart(readings);
+  }
 }
 
 // In-place ultra-fast updates: only touches changed DOM nodes every 0.1s
 async function updateDetailPanel(zone) {
   const panel = document.getElementById("detail-panel");
   if (!panel) return;
+  const isOnline = Boolean(zone.device_online);
 
   let readings = [];
-  try { readings = await API.zoneReadings(zone.id, 40); } catch {}
-  const latest = readings.length ? readings[readings.length - 1] : null;
+  if (isOnline) {
+    try { readings = await API.zoneReadings(zone.id, 40); } catch {}
+  }
+  const latest = (isOnline && readings.length) ? readings[readings.length - 1] : null;
   const incidents = state.incidents.filter(i => i.zone_id === zone.id).slice(0, 8);
 
   const badge = document.getElementById("detail-status-badge");
-  if (badge && badge.className !== `status-badge ${zone.status}`) {
-    badge.className = `status-badge ${zone.status}`;
-    badge.innerHTML = `<span class="dot"></span>${zone.status}`;
+  if (badge) {
+    if (!isOnline) {
+      badge.className = "status-badge CRITICAL";
+      badge.innerHTML = `<span class="dot" style="background:#EF4444;"></span>OFFLINE`;
+      badge.style.background = "rgba(239,68,68,0.15)";
+      badge.style.color = "#FCA5A5";
+      badge.style.borderColor = "rgba(239,68,68,0.3)";
+    } else {
+      badge.className = `status-badge ${zone.status}`;
+      badge.innerHTML = `<span class="dot"></span>${zone.status}`;
+      badge.style.background = "";
+      badge.style.color = "";
+      badge.style.borderColor = "";
+    }
   }
 
   const reasonEl = document.getElementById("detail-reason-val");
-  if (reasonEl && latest && reasonEl.textContent !== latest.reason) {
-    reasonEl.textContent = latest.reason || "All readings within normal operating range";
+  if (reasonEl) {
+    const expectedReason = isOnline 
+      ? (latest?.reason || "All readings within normal operating range")
+      : "Hardware offline — live telemetry stream paused & controls locked";
+    if (reasonEl.textContent !== expectedReason) {
+      reasonEl.textContent = expectedReason;
+    }
   }
 
   const mq2El = document.getElementById("detail-mq2-val");
-  if (mq2El && latest) {
-    const valStr = latest.mq2.toFixed(0);
-    if (mq2El.textContent !== valStr) {
-      mq2El.textContent = valStr;
-      mq2El.style.color = (latest.mq2 > 300) ? "var(--crit)" : "var(--text-0)";
+  if (mq2El) {
+    if (!isOnline) {
+      mq2El.textContent = "NO DATA";
+      mq2El.className = "metric-value no-data";
+      mq2El.style.fontSize = "18px";
+      mq2El.style.color = "";
+    } else if (latest) {
+      const valStr = latest.mq2.toFixed(0);
+      if (mq2El.textContent !== valStr) {
+        mq2El.textContent = valStr;
+        mq2El.className = "metric-value";
+        mq2El.style.fontSize = "26px";
+        mq2El.style.color = (latest.mq2 > 300) ? "var(--crit)" : "var(--text-0)";
+      }
     }
   }
 
   const mq135El = document.getElementById("detail-mq135-val");
-  if (mq135El && latest) {
-    const valStr = latest.mq135.toFixed(0);
-    if (mq135El.textContent !== valStr) mq135El.textContent = valStr;
+  if (mq135El) {
+    if (!isOnline) {
+      mq135El.textContent = "NO DATA";
+      mq135El.className = "metric-value no-data";
+      mq135El.style.fontSize = "18px";
+    } else if (latest) {
+      const valStr = latest.mq135.toFixed(0);
+      if (mq135El.textContent !== valStr) {
+        mq135El.textContent = valStr;
+        mq135El.className = "metric-value";
+        mq135El.style.fontSize = "26px";
+      }
+    }
   }
 
   const presEl = document.getElementById("detail-pressure-val");
-  if (presEl && latest) {
-    const valStr = latest.pressure.toFixed(2);
-    if (presEl.textContent !== valStr) presEl.textContent = valStr;
+  if (presEl) {
+    if (!isOnline) {
+      presEl.textContent = "NO DATA";
+      presEl.className = "metric-value no-data";
+      presEl.style.fontSize = "18px";
+    } else if (latest) {
+      const valStr = latest.pressure.toFixed(2);
+      if (presEl.textContent !== valStr) {
+        presEl.textContent = valStr;
+        presEl.className = "metric-value";
+        presEl.style.fontSize = "26px";
+      }
+    }
   }
 
   const flameEl = document.getElementById("detail-flame-val");
-  if (flameEl && latest) {
-    const html = latest.flame_detected ? '<span style="color:var(--crit);font-weight:800;">FIRE DETECTED</span>' : 'Clear';
-    if (flameEl.innerHTML !== html) flameEl.innerHTML = html;
+  if (flameEl) {
+    if (!isOnline) {
+      flameEl.innerHTML = "NO DATA";
+      flameEl.className = "metric-value no-data";
+      flameEl.style.fontSize = "18px";
+    } else if (latest) {
+      const html = latest.flame_detected ? '<span style="color:var(--crit);font-weight:800;">FIRE DETECTED</span>' : 'Clear';
+      if (flameEl.innerHTML !== html) {
+        flameEl.innerHTML = html;
+        flameEl.className = "metric-value";
+        flameEl.style.fontSize = "22px";
+      }
+    }
+  }
+
+  const valveToggle = document.getElementById("manual-valve-toggle");
+  if (valveToggle) {
+    if (!isOnline) {
+      valveToggle.disabled = true;
+    } else {
+      valveToggle.disabled = false;
+      valveToggle.checked = (zone.valve_state === "OPEN");
+    }
+  }
+
+  const valveLbl = document.getElementById("manual-valve-label");
+  if (valveLbl) {
+    if (!isOnline) {
+      valveLbl.textContent = "LOCKED (OFFLINE)";
+      valveLbl.style.color = "var(--text-dim)";
+    } else {
+      valveLbl.textContent = zone.valve_state === "OPEN" ? "ON (0° OPEN)" : "OFF (180° SHUT)";
+      valveLbl.style.color = zone.valve_state === "OPEN" ? "var(--safe)" : "var(--crit)";
+    }
   }
 
   const valveEl = document.getElementById("valve-state-value");
-  if (valveEl && valveEl.textContent !== zone.valve_state) {
-    valveEl.textContent = zone.valve_state;
-    valveEl.style.color = (zone.valve_state === "CLOSED") ? "var(--crit)" : "var(--safe)";
+  if (valveEl) {
+    const valText = isOnline ? zone.valve_state : "LOCKED";
+    if (valveEl.textContent !== valText) {
+      valveEl.textContent = valText;
+      valveEl.style.color = !isOnline ? "var(--text-dim)" : ((zone.valve_state === "CLOSED") ? "var(--crit)" : "var(--safe)");
+    }
+  }
+
+  const valveAng = document.getElementById("valve-angle-value");
+  if (valveAng) {
+    const angText = !isOnline ? "OFFLINE" : (zone.valve_state === "CLOSED" ? "180° SHUT" : "0° OPEN");
+    if (valveAng.textContent !== angText) valveAng.textContent = angText;
+  }
+
+  const shutBtn = document.getElementById("shutoff-btn");
+  if (shutBtn) {
+    if (!isOnline) {
+      shutBtn.disabled = true;
+      shutBtn.style.opacity = "0.4";
+      shutBtn.style.cursor = "not-allowed";
+      shutBtn.textContent = "🔒 Emergency Valve Interception (Offline Locked)";
+      shutBtn.onclick = null;
+    } else {
+      shutBtn.disabled = false;
+      shutBtn.style.opacity = "";
+      shutBtn.style.cursor = "";
+      shutBtn.textContent = "🚨 Emergency Valve Interception";
+      shutBtn.onclick = () => confirmShutoff(zone.id, zone.name);
+    }
   }
 
   renderTimeline(incidents);
 
-  // Update chart without flicker
-  if (state.chart && readings.length) {
+  // Update chart without flicker if online
+  if (isOnline && state.chart && readings.length) {
     state.chart.data.labels = readings.map(r => new Date(r.created_at).toLocaleTimeString());
     state.chart.data.datasets[0].data = readings.map(r => r.mq2);
     state.chart.data.datasets[1].data = readings.map(r => r.mq135);
@@ -842,6 +1130,12 @@ function renderChart(readings) {
 }
 
 function confirmShutoff(zoneId, zoneName) {
+  const zone = state.zones.find(z => z.id === zoneId);
+  if (zone && !zone.device_online) {
+    toast("Hardware device is offline. Valve control is not available.", "error");
+    return;
+  }
+
   const el = document.createElement("div");
   el.className = "overlay-scrim";
   el.style.alignItems = "center"; el.style.justifyContent = "center";
@@ -872,7 +1166,7 @@ function confirmShutoff(zoneId, zoneName) {
 }
 
 // Modals for Admin
-function openAdminModal(title, contentHtml) {
+function openAdminModal(title, contentHtml, maxWidth = "620px") {
   const existing = document.getElementById("admin-scrim");
   if (existing) existing.remove();
 
@@ -880,7 +1174,7 @@ function openAdminModal(title, contentHtml) {
   scrim.className = "overlay-scrim";
   scrim.id = "admin-scrim";
   scrim.innerHTML = `
-    <div class="detail-panel" style="max-width:620px;width:95%;">
+    <div class="detail-panel" style="max-width:${maxWidth};width:95%;">
       <div class="detail-head">
         <div class="detail-title">${escapeHtml(title)}</div>
         <button class="close-btn" id="close-admin-modal">✕</button>
@@ -945,26 +1239,182 @@ async function openUsersModal() {
   } catch (err) { toast(err.message, "crit"); }
 }
 
-async function openAuditModal() {
-  openAdminModal("Audit & Security Log", `<div style="color:var(--text-2);">Loading audit trail…</div>`);
-  try {
-    const logs = await API.listAudit();
-    const modalBody = document.querySelector("#admin-scrim .detail-panel > div:last-child");
-    if (!modalBody) return;
-    modalBody.innerHTML = `
-      <div style="max-height:450px;overflow-y:auto;">
-        ${logs.map(log => `
-          <div style="padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;">
-            <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:3px;font-size:11px;">
-              <span style="font-weight:700;color:var(--cyan);">${escapeHtml(log.action)}</span>
-              <span>${new Date(log.created_at).toLocaleTimeString()}</span>
-            </div>
-            <div style="color:var(--text-0);">${escapeHtml(log.detail || "Action completed")}</div>
+let _currentAuditModalMod = null;
+
+async function openAuditModal(initialModuleId = null) {
+  _currentAuditModalMod = initialModuleId;
+  openAdminModal("Module Audit Trails & Security Logs", `
+    <div class="audit-modal-container" id="audit-modal-container">
+      <div class="audit-notice-banner">
+        <span class="icon">🔒</span>
+        <div>
+          <b>Module-Isolated Audit System:</b> Audit records are segregated per subsystem.
+          Select a module below to inspect its dedicated audit trail.
+        </div>
+      </div>
+      <div id="audit-modules-selector" class="audit-module-grid">
+        <div style="grid-column:1/-1;color:var(--text-2);font-size:12.5px;padding:12px;text-align:center;">
+          Loading available modules…
+        </div>
+      </div>
+      <div id="audit-module-content">
+        <div class="audit-unselected-box">
+          <div style="font-size:32px;margin-bottom:8px;">📁</div>
+          <div style="font-weight:700;color:var(--text-0);font-size:14px;margin-bottom:4px;">No Module Selected</div>
+          <div style="font-size:12px;color:var(--text-2);max-width:380px;margin:0 auto;line-height:1.5;">
+            Audit trails are strictly separated for each module and can only be viewed by selecting the corresponding module above.
           </div>
-        `).join("")}
+        </div>
+      </div>
+    </div>
+  `, "780px");
+
+  try {
+    const modules = await API.listAuditModules();
+    const selector = document.getElementById("audit-modules-selector");
+    if (!selector) return;
+
+    function renderModuleCards() {
+      selector.innerHTML = modules.map(m => {
+        const isActive = _currentAuditModalMod === m.id;
+        return `
+          <button class="audit-module-card ${isActive ? 'active' : ''}" data-mod-id="${m.id}" type="button">
+            <div class="audit-module-card-top">
+              <span class="audit-module-icon">${m.icon}</span>
+              <span class="audit-module-badge">${m.count} logs</span>
+            </div>
+            <div class="audit-module-title">${escapeHtml(m.name)}</div>
+            <div class="audit-module-desc">${escapeHtml(m.tag)}</div>
+          </button>
+        `;
+      }).join("");
+
+      selector.querySelectorAll(".audit-module-card").forEach(btn => {
+        btn.onclick = () => {
+          _currentAuditModalMod = btn.dataset.modId;
+          renderModuleCards();
+          loadModuleAuditTrail(_currentAuditModalMod);
+        };
+      });
+    }
+
+    renderModuleCards();
+
+    if (_currentAuditModalMod) {
+      loadModuleAuditTrail(_currentAuditModalMod);
+    }
+  } catch (err) {
+    toast("Failed to load audit modules: " + err.message, "crit");
+  }
+}
+
+async function loadModuleAuditTrail(moduleId, searchTerm = "") {
+  const content = document.getElementById("audit-module-content");
+  if (!content) return;
+
+  content.innerHTML = `<div style="color:var(--text-2);padding:28px;text-align:center;font-size:13px;">Fetching ${escapeHtml(moduleId)} audit records…</div>`;
+
+  try {
+    const data = await API.listAudit(moduleId, searchTerm);
+    const mod = data.module;
+    const logs = data.logs || [];
+
+    const chipClass = {
+      AUTH: "audit-chip-auth",
+      ACTUATOR: "audit-chip-actuator",
+      INCIDENTS: "audit-chip-incidents",
+      ZONES: "audit-chip-zones",
+      SENSORS: "audit-chip-sensors",
+      SIMULATION: "audit-chip-simulation",
+    }[moduleId] || "audit-chip-system";
+
+    content.innerHTML = `
+      <div class="audit-viewer-head">
+        <div class="audit-viewer-title">
+          <span style="font-size:18px;">${mod.icon}</span>
+          <span>${escapeHtml(mod.name)} Audit Trail</span>
+          <span class="audit-module-badge" style="background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);">${data.total_records} Records</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="audit-search-bar">
+            <input type="text" id="module-audit-search" placeholder="Search ${escapeHtml(mod.name)}…" value="${escapeHtml(searchTerm)}">
+          </div>
+          <button class="btn-ghost" id="refresh-module-audit-btn" title="Refresh" style="padding:6px 10px;font-size:12px;">🔄</button>
+          <a class="btn-ghost" href="/api/audit/export.csv?module=${encodeURIComponent(moduleId)}" download="audit_${moduleId.toLowerCase()}.csv" style="padding:6px 10px;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+            <span>📥</span><span>Export CSV</span>
+          </a>
+        </div>
+      </div>
+      
+      <div style="font-size:11.5px;color:var(--text-2);margin:4px 0 10px 4px;">
+        ${escapeHtml(mod.description || "")}
+      </div>
+
+      <div class="audit-table-wrap">
+        ${logs.length === 0 ? `
+          <div style="padding:32px 16px;text-align:center;color:var(--text-2);font-size:12.5px;">
+            No audit records found for module <b>${escapeHtml(mod.name)}</b>${searchTerm ? ` matching "${escapeHtml(searchTerm)}"` : ""}.
+          </div>
+        ` : `
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:140px;">Timestamp</th>
+                <th style="width:160px;">Action</th>
+                <th style="width:140px;">Actor / User</th>
+                <th>Detail & Telemetry Payload</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map(log => `
+                <tr>
+                  <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-2);white-space:nowrap;">
+                    <div>${new Date(log.created_at).toLocaleTimeString()}</div>
+                    <div style="font-size:10px;opacity:0.75;">${new Date(log.created_at).toLocaleDateString()}</div>
+                  </td>
+                  <td>
+                    <span class="audit-action-chip ${chipClass}">${escapeHtml(log.action)}</span>
+                  </td>
+                  <td style="font-size:11.5px;color:var(--text-1);">
+                    ${escapeHtml(log.user_id || "SYSTEM")}
+                  </td>
+                  <td style="font-size:12px;color:var(--text-0);word-break:break-word;">
+                    ${escapeHtml(log.detail || "Event successfully recorded")}
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `}
       </div>
     `;
-  } catch (err) { toast(err.message, "crit"); }
+
+    const searchInput = document.getElementById("module-audit-search");
+    if (searchInput) {
+      let timer;
+      searchInput.oninput = (e) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          loadModuleAuditTrail(moduleId, e.target.value.trim());
+        }, 300);
+      };
+      if (searchTerm) {
+        searchInput.focus();
+        searchInput.selectionStart = searchInput.selectionEnd = searchInput.value.length;
+      }
+    }
+
+    const refreshBtn = document.getElementById("refresh-module-audit-btn");
+    if (refreshBtn) {
+      refreshBtn.onclick = () => loadModuleAuditTrail(moduleId, searchTerm);
+    }
+  } catch (err) {
+    content.innerHTML = `
+      <div class="auth-error" style="margin:16px 0;">
+        Failed to load ${escapeHtml(moduleId)} audit logs: ${escapeHtml(err.message)}
+      </div>
+    `;
+  }
 }
 
 // ================= BOOT ROUTER =================

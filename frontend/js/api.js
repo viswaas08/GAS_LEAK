@@ -66,11 +66,18 @@ const API = (() => {
     acknowledge: (id, note) => request(`/api/incidents/${id}/acknowledge`, { method: "POST", body: { note } }),
 
     shutoff: (zoneId) => request("/api/actuator/shutoff", { method: "POST", body: { zone_id: zoneId, confirm: true } }),
+    setValveState: (zoneId, targetState) => request("/api/actuator/valve-control", { method: "POST", body: { zone_id: zoneId, target_state: targetState } }),
     valveStatus: (zoneId) => request(`/api/actuator/${zoneId}/status`),
 
     simulate: (zoneId, scenario) => request("/api/simulate/event", { method: "POST", body: { zone_id: zoneId, scenario } }),
 
     listUsers: () => request("/api/audit/users"),
-    listAudit: () => request("/api/audit"),
+    listAuditModules: () => request("/api/audit/modules"),
+    listAudit: (module, search) => {
+      const q = new URLSearchParams();
+      if (module) q.set("module", module);
+      if (search) q.set("search", search);
+      return request(`/api/audit${q.toString() ? "?" + q.toString() : ""}`);
+    },
   };
 })();

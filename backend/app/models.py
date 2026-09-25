@@ -128,6 +128,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(String, primary_key=True, default=gen_id)
     user_id = Column(String, nullable=True)
+    module = Column(String, nullable=True, default="SYSTEM", index=True)
     action = Column(String, nullable=False)
     detail = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
