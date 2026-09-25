@@ -170,7 +170,7 @@ def main():
                     if current_time - last_post_time >= 0.1:
                         last_post_time = current_time
 
-                        hazard_str = "🚨 HAZARD!" if (mq2 >= 300 or flame) else "✅ SAFE"
+                        hazard_str = "🚨 HAZARD!" if (mq2 >= 100.0 or flame) else "✅ SAFE"
                         valve_str = "180° CLOSED (OFF)" if valve_closed else "0° OPEN (ON)"
                         ts = datetime.now().strftime('%H:%M:%S.%f')[:-4]
                         
@@ -188,7 +188,7 @@ def main():
                         )
                         print(f"           ➔ Website Response: Status={server_status} | Remote Valve={valve_cmd}")
 
-                        is_safe = (mq2 < 300.0 and not flame)
+                        is_safe = (mq2 < 100.0 and not flame)
 
                         # Remote website control & Safe Mode Enforcement:
                         if is_safe and valve_closed:

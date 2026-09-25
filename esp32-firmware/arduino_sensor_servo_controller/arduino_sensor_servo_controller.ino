@@ -47,7 +47,7 @@ const int PIN_SW_RX         = 10;  // SoftwareSerial RX (from ESP32 TX)
 const int PIN_SW_TX         = 11;  // SoftwareSerial TX (to ESP32 RX)
 
 // ---------- THRESHOLDS ----------
-const float GAS_THRESHOLD = 300.0; // Gas level above 300 indicates leakage
+const float GAS_THRESHOLD = 100.0; // Gas level above 100 indicates leakage
 
 // ---------- SERVO POSITIONS ----------
 const int VALVE_OPEN_ANGLE   = 0;    // Normal operating condition

@@ -49,7 +49,7 @@ const int PIN_MANUAL_SWITCH = 4;  // Manual Push Button / Switch (Pin 4 to GND w
 const int CLEAN_AIR_BASELINE = 90; 
 
 // Threshold for Hazardous Gas Leak (PPM equivalent above baseline)
-const float GAS_THRESHOLD = 300.0;
+const float GAS_THRESHOLD = 100.0;
 
 const int VALVE_OPEN_ANGLE   = 0;
 const int VALVE_CLOSED_ANGLE = 180;

@@ -46,7 +46,7 @@ const int PIN_ACTUATOR      = 26;   // Actuator / Valve Relay / Servo pin
 const int PIN_MANUAL_SWITCH = 4;    // Manual switch / Push button (Active LOW with internal pullup)
 
 // 5. Thresholds & Timing
-const float GAS_THRESHOLD = 300.0;          // Threshold specified (> 300 triggers alert)
+const float GAS_THRESHOLD = 100.0;          // Threshold specified (> 100 triggers alert)
 const unsigned long SEND_INTERVAL_MS = 2000; // Send reading every 2 seconds
 // ======================================================
 

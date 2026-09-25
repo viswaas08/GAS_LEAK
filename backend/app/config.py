@@ -50,10 +50,10 @@ class Settings:
     ACTUATOR_COMMAND_TIMEOUT_SECONDS: int = int(os.getenv("ACTUATOR_COMMAND_TIMEOUT_SECONDS", "20"))
 
     # --- Sensor thresholds (rule-based, not AI) ---
-    MQ2_WARNING: float = float(os.getenv("MQ2_WARNING", "300.0"))
-    MQ2_CRITICAL: float = float(os.getenv("MQ2_CRITICAL", "600.0"))
-    MQ135_WARNING: float = float(os.getenv("MQ135_WARNING", "300.0"))
-    MQ135_CRITICAL: float = float(os.getenv("MQ135_CRITICAL", "600.0"))
+    MQ2_WARNING: float = float(os.getenv("MQ2_WARNING", "100.0"))
+    MQ2_CRITICAL: float = float(os.getenv("MQ2_CRITICAL", "300.0"))
+    MQ135_WARNING: float = float(os.getenv("MQ135_WARNING", "100.0"))
+    MQ135_CRITICAL: float = float(os.getenv("MQ135_CRITICAL", "300.0"))
     PRESSURE_MIN_SAFE: float = 0.8   # bar, relative
     PRESSURE_MAX_SAFE: float = 1.2
     PRESSURE_WARNING_BAND: float = 0.15  # extra band beyond safe before CRITICAL
