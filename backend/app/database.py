@@ -13,6 +13,13 @@ if "channel_binding" in db_url:
         db_url = db_url.replace("&", "?", 1)
 
 is_sqlite = db_url.startswith("sqlite")
+if not is_sqlite:
+    try:
+        import psycopg2
+    except ImportError:
+        db_url = "sqlite:///pipeline_gas.db"
+        is_sqlite = True
+
 connect_args = {"check_same_thread": False} if is_sqlite else {}
 
 engine = create_engine(

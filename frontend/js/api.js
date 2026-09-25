@@ -79,5 +79,12 @@ const API = (() => {
       if (search) q.set("search", search);
       return request(`/api/audit${q.toString() ? "?" + q.toString() : ""}`);
     },
+
+    // Pipeline Schematic & Dynamic Hardware Module Insertion
+    getSchematic: () => request("/api/pipeline/schematic"),
+    connectModule: (data) => request("/api/pipeline/modules/connect", { method: "POST", body: data }),
+    updateModulePosition: (deviceCode, data) => request(`/api/pipeline/modules/${encodeURIComponent(deviceCode)}/position`, { method: "PUT", body: data }),
+    disconnectModule: (deviceCode) => request(`/api/pipeline/modules/${encodeURIComponent(deviceCode)}`, { method: "DELETE" }),
+    scanPipelineModules: () => request("/api/pipeline/scan-detect", { method: "POST" }),
   };
 })();

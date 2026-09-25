@@ -51,6 +51,8 @@ class ZoneCreate(BaseModel):
     name: str
     location: Optional[str] = None
     device_code: str
+    segment_id: Optional[str] = "SEG-01"
+    position_ratio: Optional[float] = 0.5
 
 
 class ZoneAssignUser(BaseModel):
@@ -70,6 +72,10 @@ class ZoneOut(BaseModel):
     name: str
     location: Optional[str]
     device_code: Optional[str] = None
+    segment_id: Optional[str] = "SEG-01"
+    segment_name: Optional[str] = None
+    position_ratio: Optional[float] = 0.5
+    hardware_type: Optional[str] = None
     status: PipelineStatus = PipelineStatus.OFFLINE
     valve_state: ValveState = ValveState.UNKNOWN
     device_online: bool = False
@@ -87,6 +93,7 @@ class SensorIngest(BaseModel):
     pressure: float
     flame_detected: bool = False
     valve_closed: Optional[bool] = None
+    segment_id: Optional[str] = None
 
 
 class SensorReadingOut(BaseModel):
@@ -151,3 +158,65 @@ class SimulateEvent(BaseModel):
     zone_id: str
     scenario: str = Field(..., description="gas_leak | pressure_anomaly | flame | offline | safe | "
                                             "valve_ack_success | valve_ack_fail")
+
+
+# ---------- Pipeline Schematic & Modules ----------
+class ModuleConnectRequest(BaseModel):
+    device_code: str
+    name: Optional[str] = None
+    segment_id: Optional[str] = None
+    position_ratio: Optional[float] = 0.5
+    hardware_type: Optional[str] = "ESP32-WROOM-32 + MQ-2 + 180° Servo"
+    initial_mq2: Optional[float] = 160.0
+    initial_flame: Optional[bool] = False
+    initial_pressure: Optional[float] = 1.02
+
+
+class ModulePositionUpdate(BaseModel):
+    segment_id: str
+    position_ratio: float = Field(..., ge=0.05, le=0.95)
+
+
+class SchematicModuleOut(BaseModel):
+    device_code: str
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    segment_id: str
+    segment_name: str
+    position_ratio: float
+    hardware_type: str
+    status: PipelineStatus
+    valve_state: ValveState
+    device_online: bool
+    last_heartbeat: Optional[datetime] = None
+    latest: Optional[LatestReading] = None
+    class Config:
+        from_attributes = True
+
+
+class SchematicSegmentOut(BaseModel):
+    id: str
+    name: str
+    code: str
+    from_node: str
+    to_node: str
+    specs: str
+    length_km: float
+    flow_direction: str
+    coordinates: dict
+    status: str
+    pressure_bar: float
+    max_mq2: float
+    flame_detected: bool
+    valve_closed: bool
+    modules: List[SchematicModuleOut] = []
+
+
+class SchematicOverviewOut(BaseModel):
+    segments: List[SchematicSegmentOut]
+    total_modules: int
+    online_modules: int
+    critical_count: int
+    warning_count: int
+    system_status: str
+    timestamp: datetime

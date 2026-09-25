@@ -34,6 +34,10 @@ def _zone_out(db: Session, zone: models.Zone) -> schemas.ZoneOut:
     return schemas.ZoneOut(
         id=zone.id, name=zone.name, location=zone.location,
         device_code=device.device_code if device else None,
+        segment_id=zone.segment_id or (device.segment_id if device else "SEG-01"),
+        segment_name=device.segment_name if device else "Primary Segment",
+        position_ratio=device.position_ratio if (device and device.position_ratio is not None) else 0.5,
+        hardware_type=device.hardware_type if device else "ESP32-WROOM-32 + MQ-2 + 180° Servo",
         status=status,
         valve_state=device.valve_state if device else models.ValveState.UNKNOWN,
         device_online=online,
@@ -60,15 +64,32 @@ def get_zone(zone_id: str, db: Session = Depends(get_db), user: models.User = De
 def create_zone(req: schemas.ZoneCreate, db: Session = Depends(get_db),
                  user: models.User = Depends(require_roles(models.Role.ADMIN))):
     device = db.query(models.Device).filter(models.Device.device_code == req.device_code).first()
+    seg_id = req.segment_id or "SEG-01"
     if not device:
-        device = models.Device(device_code=req.device_code)
+        from .pipeline import get_segment_meta
+        seg_meta = get_segment_meta(seg_id)
+        device = models.Device(
+            device_code=req.device_code,
+            segment_id=seg_id,
+            segment_name=seg_meta["name"],
+            position_ratio=req.position_ratio if req.position_ratio is not None else 0.5,
+        )
         db.add(device)
         db.commit()
         db.refresh(device)
-    zone = models.Zone(name=req.name, location=req.location, device_id=device.id)
+    else:
+        if req.segment_id:
+            from .pipeline import get_segment_meta
+            device.segment_id = req.segment_id
+            device.segment_name = get_segment_meta(req.segment_id)["name"]
+        if req.position_ratio is not None:
+            device.position_ratio = req.position_ratio
+        db.commit()
+
+    zone = models.Zone(name=req.name, location=req.location, segment_id=device.segment_id, device_id=device.id)
     db.add(zone)
     db.add(models.AuditLog(user_id=user.id, module="ZONES", action="ZONE_CREATED",
-                            detail=f"zone={zone.name} device={req.device_code}"))
+                            detail=f"zone={zone.name} device={req.device_code} segment={device.segment_id}"))
     db.commit()
     db.refresh(zone)
     return _zone_out(db, zone)

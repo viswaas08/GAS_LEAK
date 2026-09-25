@@ -13,6 +13,12 @@ const state = {
   ws: null,
   activePoll: null,
   cachedValues: {},
+  schematic: null,
+  selectedSegmentId: null,
+  newlyDetectedModules: new Set(),
+  knownDeviceCodes: new Set(),
+  autoDetectBannerTimeout: null,
+  viewMode: "both", // "both" | "schematic" | "cards"
 };
 
 const root = document.getElementById("app");
@@ -415,7 +421,70 @@ function bootDashboard() {
     </div>
     <div class="main">
       <div class="summary-row" id="summary-row"></div>
-      <div class="zones-col">
+
+      <!-- Interactive Pipeline Network Schematic & Dynamic Hardware Module Insertion -->
+      <section class="schematic-section" id="schematic-section">
+        <div class="schematic-card">
+          <div class="schematic-head">
+            <div class="schematic-title-group">
+              <div class="schematic-icon">🗺️</div>
+              <div>
+                <div class="schematic-title">
+                  <span>Pipeline Network Schematic & Module Insertion Map</span>
+                  <span class="brand-tag" style="margin-left:4px;">SCADA Vector</span>
+                </div>
+                <div class="schematic-subtitle">
+                  Live topological pipeline blueprint with real-time hardware module auto-detection
+                </div>
+              </div>
+            </div>
+            <div class="schematic-badges">
+              <span class="schematic-badge live" id="schematic-auto-detect-pill">
+                <span class="pulse-dot"></span>
+                <span>Auto-Detect: Active (0.1s)</span>
+              </span>
+              <span class="schematic-badge" id="schematic-module-count-badge">
+                <b>1</b> Modules Inserted
+              </span>
+              <span class="schematic-badge" id="schematic-flow-badge" style="color:var(--safe);">
+                ⚡ Flow: Normal (1.02 Bar)
+              </span>
+            </div>
+            <div class="schematic-toolbar">
+              <button class="btn-schematic-action primary" id="btn-insert-module-modal" type="button">
+                <span>🔌</span><span>Insert Module</span>
+              </button>
+              <button class="btn-schematic-action hotplug" id="btn-hotplug-demo" type="button" title="Hotplug a new module to verify automatic detection">
+                <span>⚡</span><span>Demo Hotplug</span>
+              </button>
+              <button class="btn-schematic-action" id="btn-scan-modules" type="button">
+                <span>🔍</span><span>Scan Hardware</span>
+              </button>
+              <button class="btn-schematic-action" id="btn-toggle-view-mode" type="button">
+                <span id="view-mode-icon">👁️</span><span id="view-mode-text">Schematic View</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Auto-Detection Announcement Banner -->
+          <div id="auto-detect-banner-container"></div>
+
+          <!-- Interactive SVG Schematic Map Viewport -->
+          <div class="schematic-viewport">
+            <div class="schematic-grid-bg"></div>
+            <div id="schematic-svg-mount">
+              <div style="padding:60px 20px;text-align:center;color:var(--text-2);font-size:13px;">
+                Initialising cyber-physical pipeline schematic blueprint…
+              </div>
+            </div>
+          </div>
+
+          <!-- Segments Horizontal Status Strip -->
+          <div class="segments-strip" id="segments-strip"></div>
+        </div>
+      </section>
+
+      <div class="zones-col" id="zones-col-wrapper">
         <div class="section-head">
           <h2>Active Pipeline Units</h2>
           <span style="font-size:12px;color:var(--text-2);background:var(--bg-2);padding:4px 10px;border-radius:6px;border:1px solid var(--line);">
@@ -496,7 +565,7 @@ function bootDashboard() {
   document.getElementById("logout-btn").onclick = () => {
     API.clearSession();
     if (state.activePoll) { clearInterval(state.activePoll); state.activePoll = null; }
-    if (state.ws) state.ws.close();
+    if (state.ws) { state.ws.close(); state.ws = null; }
     renderLandingPage();
   };
 
@@ -506,8 +575,95 @@ function bootDashboard() {
     };
   });
 
+  // Schematic Toolbar Listeners
+  document.getElementById("btn-insert-module-modal").onclick = () => openInsertModuleModal();
+  document.getElementById("btn-hotplug-demo").onclick = () => simulateHotplugModule();
+  document.getElementById("btn-scan-modules").onclick = () => runAutoDetectScan();
+  document.getElementById("btn-toggle-view-mode").onclick = () => toggleViewMode();
+
+  setupWebSocket();
   loadZonesAndIncidents();
   startSubsecondEngine();
+}
+
+function setupWebSocket() {
+  if (state.ws) {
+    try { state.ws.close(); } catch {}
+  }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${proto}//${location.host}/ws`;
+  try {
+    const ws = new WebSocket(wsUrl);
+    state.ws = ws;
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleWebSocketMessage(msg);
+      } catch {}
+    };
+    ws.onclose = () => {
+      // Reconnect after brief backoff
+      setTimeout(() => {
+        if (API.getToken()) setupWebSocket();
+      }, 3000);
+    };
+  } catch {}
+}
+
+function handleWebSocketMessage(msg) {
+  if (!msg) return;
+  if (msg.type === "module_connected") {
+    handleNewModuleDetected(msg.data);
+  } else if (msg.type === "sensor_update") {
+    if (state.schematic) {
+      // Fast in-place telemetry update on schematic
+      for (const seg of state.schematic.segments) {
+        const mod = (seg.modules || []).find(m => m.device_code === msg.data.device_code);
+        if (mod) {
+          if (!mod.latest) mod.latest = {};
+          mod.latest.mq2 = msg.data.mq2;
+          mod.latest.mq135 = msg.data.mq135;
+          mod.latest.pressure = msg.data.pressure;
+          mod.latest.flame_detected = msg.data.flame_detected;
+          mod.status = msg.data.status;
+          mod.valve_state = msg.data.valve_state;
+          mod.device_online = true;
+          renderSchematicMap();
+          break;
+        }
+      }
+    }
+  } else if (msg.type === "schematic_update" || msg.type === "module_repositioned" || msg.type === "module_disconnected") {
+    loadZonesAndIncidents();
+  }
+}
+
+function toggleViewMode() {
+  const modes = ["both", "schematic", "cards"];
+  const curIdx = modes.indexOf(state.viewMode || "both");
+  state.viewMode = modes[(curIdx + 1) % modes.length];
+
+  const schemSec = document.getElementById("schematic-section");
+  const zonesCol = document.getElementById("zones-col-wrapper");
+  const txt = document.getElementById("view-mode-text");
+  const icon = document.getElementById("view-mode-icon");
+
+  if (state.viewMode === "both") {
+    if (schemSec) schemSec.style.display = "";
+    if (zonesCol) zonesCol.style.display = "";
+    if (txt) txt.textContent = "View: Both";
+    if (icon) icon.textContent = "👁️";
+  } else if (state.viewMode === "schematic") {
+    if (schemSec) schemSec.style.display = "";
+    if (zonesCol) zonesCol.style.display = "none";
+    if (txt) txt.textContent = "View: Schematic";
+    if (icon) icon.textContent = "🗺️";
+  } else {
+    if (schemSec) schemSec.style.display = "none";
+    if (zonesCol) zonesCol.style.display = "";
+    if (txt) txt.textContent = "View: Cards";
+    if (icon) icon.textContent = "📋";
+  }
 }
 
 // 0.1s (100ms) Real-Time Synchronization Engine
@@ -534,12 +690,40 @@ function startSubsecondEngine() {
 
 async function loadZonesAndIncidents() {
   try {
-    const [zones, incidents] = await Promise.all([
+    const [zones, incidents, schematic] = await Promise.all([
       API.listZones(),
-      API.listIncidents()
+      API.listIncidents(),
+      API.getSchematic().catch(() => null)
     ]);
     state.zones = zones;
     state.incidents = incidents;
+
+    if (schematic) {
+      // Auto-detection tracking: check for newly appeared devices
+      const currentCodes = new Set();
+      schematic.segments.forEach(seg => {
+        (seg.modules || []).forEach(m => currentCodes.add(m.device_code));
+      });
+
+      if (state.knownDeviceCodes.size > 0) {
+        for (const code of currentCodes) {
+          if (!state.knownDeviceCodes.has(code)) {
+            // New device code automatically detected!
+            let detectedMod = null;
+            for (const seg of schematic.segments) {
+              const f = (seg.modules || []).find(m => m.device_code === code);
+              if (f) { detectedMod = f; break; }
+            }
+            if (detectedMod) {
+              handleNewModuleDetected(detectedMod);
+            }
+          }
+        }
+      }
+      state.knownDeviceCodes = currentCodes;
+      state.schematic = schematic;
+      renderSchematicMap();
+    }
 
     renderSummary();
     renderZoneGrid();
@@ -685,6 +869,15 @@ function renderAdminPanel() {
       </div>
       <p class="panel-desc">Manage physical zones, inspect operators, and check module security logs.</p>
       <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-ghost" id="admin-insert-mod-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;color:var(--cyan);border-color:rgba(6,182,212,0.3);">
+          <span>🔌</span><span>Insert Hardware Module</span>
+        </button>
+        <button class="btn-ghost" id="admin-hotplug-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;color:var(--neon-brand);border-color:rgba(0,229,153,0.3);">
+          <span>⚡</span><span>Simulate Hardware Hotplug</span>
+        </button>
+        <button class="btn-ghost" id="admin-scan-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
+          <span>🔍</span><span>Scan & Detect Pipeline</span>
+        </button>
         <button class="btn-ghost" id="admin-add-zone-btn" style="text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;width:100%;">
           <span>➕</span><span>Register Pipeline Zone</span>
         </button>
@@ -698,6 +891,9 @@ function renderAdminPanel() {
     </div>
   `;
 
+  document.getElementById("admin-insert-mod-btn").onclick = () => openInsertModuleModal();
+  document.getElementById("admin-hotplug-btn").onclick = () => simulateHotplugModule();
+  document.getElementById("admin-scan-btn").onclick = () => runAutoDetectScan();
   document.getElementById("admin-add-zone-btn").onclick = openAddZoneModal;
   document.getElementById("admin-users-btn").onclick = openUsersModal;
   document.getElementById("admin-audit-btn").onclick = () => openAuditModal();
@@ -1415,6 +1611,616 @@ async function loadModuleAuditTrail(moduleId, searchTerm = "") {
       </div>
     `;
   }
+}
+
+// ===============================================================
+// 5. INTERACTIVE PIPELINE SCHEMATIC MAP & DYNAMIC MODULE INSERTION
+// ===============================================================
+
+function renderSchematicMap() {
+  const mount = document.getElementById("schematic-svg-mount");
+  if (!mount || !state.schematic) return;
+
+  const segs = state.schematic.segments || [];
+  const totalMods = state.schematic.total_modules || 0;
+
+  // Update badge counters
+  const cntBadge = document.getElementById("schematic-module-count-badge");
+  if (cntBadge) cntBadge.innerHTML = `<b>${totalMods}</b> Modules Inserted`;
+
+  const flowBadge = document.getElementById("schematic-flow-badge");
+  if (flowBadge) {
+    const isCrit = state.schematic.system_status === "CRITICAL";
+    const isWarn = state.schematic.system_status === "WARNING";
+    const anyClosed = segs.some(s => s.valve_closed);
+    if (isCrit) {
+      flowBadge.style.color = "var(--crit)";
+      flowBadge.innerHTML = `🚨 Interception Alert (${anyClosed ? '180° SHUT' : 'EMERGENCY'})`;
+    } else if (isWarn) {
+      flowBadge.style.color = "var(--warn)";
+      flowBadge.innerHTML = `⚠️ Elevated Gas Flow`;
+    } else {
+      flowBadge.style.color = "var(--safe)";
+      flowBadge.innerHTML = `⚡ Flow: Normal (1.02 Bar)`;
+    }
+  }
+
+  // Predefined Stations & Coordinates
+  const stations = [
+    { id: "alpha", name: "Station Alpha", sub: "Main Compressor · Inlet", x: 30, y: 140, w: 110, h: 54, type: "compressor" },
+    { id: "j1", name: "Junction J1", sub: "HP Manifold Hub", x: 310, y: 140, w: 95, h: 54, type: "manifold" },
+    { id: "j2", name: "Hub J2", sub: "Central Distributor", x: 560, y: 140, w: 95, h: 54, type: "manifold" },
+    { id: "gamma", name: "Substation Gamma", sub: "Refinery / Turbine Feed", x: 770, y: 45, w: 125, h: 54, type: "refinery" },
+    { id: "delta", name: "Station Delta", sub: "City Gate Terminal", x: 770, y: 235, w: 125, h: 54, type: "citygate" },
+    { id: "flare", name: "Flare Stack Delta", sub: "180° Emergency Relief", x: 250, y: 275, w: 125, h: 50, type: "flare" },
+  ];
+
+  // Pipeline route paths
+  const pipeCoords = {
+    "SEG-01": { x1: 140, y1: 167, x2: 310, y2: 167, labelX: 225, labelY: 155 },
+    "SEG-02": { x1: 405, y1: 167, x2: 560, y2: 167, labelX: 482, labelY: 155 },
+    "SEG-03": { x1: 655, y1: 155, x2: 770, y2: 75,  labelX: 705, labelY: 105 },
+    "SEG-04": { x1: 655, y1: 180, x2: 770, y2: 260, labelX: 705, labelY: 230 },
+    "SEG-05": { x1: 355, y1: 194, x2: 355, y2: 275, labelX: 375, labelY: 235 },
+  };
+
+  let svgHtml = `
+    <svg class="schematic-svg" viewBox="0 0 920 340" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+  `;
+
+  // Draw Pipes
+  segs.forEach(seg => {
+    const coords = pipeCoords[seg.id] || { x1: 100, y1: 100, x2: 300, y2: 100, labelX: 200, labelY: 90 };
+    const isCrit = seg.status === "CRITICAL";
+    const isWarn = seg.status === "WARNING";
+    const isOffline = seg.status === "OFFLINE";
+    const isIdle = seg.status === "IDLE";
+    const isClosed = seg.valve_closed;
+
+    const strokeClass = isCrit ? "pipe-critical" : (isWarn ? "pipe-warning" : (isOffline ? "pipe-offline" : (isIdle ? "pipe-idle" : "pipe-safe")));
+    const flowClass = isClosed ? "flow-stopped" : "";
+    const filterAttr = isCrit ? 'filter="url(#glow-red)"' : (isWarn ? '' : 'filter="url(#glow-cyan)"');
+
+    // Pipe outer steel casing & flow
+    svgHtml += `
+      <!-- Segment ${seg.code}: ${escapeHtml(seg.name)} -->
+      <line x1="${coords.x1}" y1="${coords.y1}" x2="${coords.x2}" y2="${coords.y2}" stroke="#1E293B" stroke-width="14" stroke-linecap="round" />
+      <line x1="${coords.x1}" y1="${coords.y1}" x2="${coords.x2}" y2="${coords.y2}" class="pipe-core ${strokeClass}" stroke-width="6" ${filterAttr} />
+      <line x1="${coords.x1}" y1="${coords.y1}" x2="${coords.x2}" y2="${coords.y2}" class="pipe-particles ${strokeClass} ${flowClass}" stroke-width="3" stroke="#fff" opacity="${isClosed ? '0.15' : '0.85'}" />
+    `;
+
+    // Segment label chip on pipe
+    svgHtml += `
+      <g style="cursor:pointer;" class="segment-label-chip" data-segment-id="${seg.id}">
+        <rect x="${coords.labelX - 32}" y="${coords.labelY - 11}" width="64" height="18" rx="4" fill="#0B132B" stroke="${isCrit ? '#EF4444' : (isWarn ? '#F59E0B' : '#334155')}" stroke-width="1" />
+        <text x="${coords.labelX}" y="${coords.labelY + 2}" text-anchor="middle" fill="${isCrit ? '#FCA5A5' : '#94A3B8'}" font-family="var(--font-mono)" font-size="9.5" font-weight="700">${seg.code}</text>
+      </g>
+    `;
+  });
+
+  // Draw Stations
+  stations.forEach(st => {
+    svgHtml += `
+      <g class="station-node" transform="translate(${st.x}, ${st.y})">
+        <rect width="${st.w}" height="${st.h}" rx="8" class="station-box ${st.type}" />
+        <circle cx="16" cy="18" r="5" fill="${st.type === 'flare' ? '#EF4444' : (st.type === 'compressor' ? '#00E599' : '#06B6D4')}" />
+        <text x="28" y="22" class="station-title">${st.name}</text>
+        <text x="14" y="42" class="station-sub">${st.sub}</text>
+      </g>
+    `;
+  });
+
+  // Draw Inserted Modules on Pipes
+  segs.forEach(seg => {
+    const coords = pipeCoords[seg.id];
+    if (!coords) return;
+    const mods = seg.modules || [];
+
+    mods.forEach((m, idx) => {
+      const pos = Math.max(0.12, Math.min(0.88, m.position_ratio != null ? m.position_ratio : 0.5));
+      const mx = coords.x1 + (coords.x2 - coords.x1) * pos;
+      const my = coords.y1 + (coords.y2 - coords.y1) * pos;
+
+      const isNewlyDetected = state.newlyDetectedModules.has(m.device_code);
+      const isCrit = m.status === "CRITICAL";
+      const isWarn = m.status === "WARNING";
+      const isOffline = !m.device_online;
+      const statusClass = isCrit ? "critical" : (isWarn ? "warning" : (isOffline ? "offline" : "safe"));
+      const isValveClosed = m.valve_state === "CLOSED";
+
+      let cardX, cardY, stemX1, stemY1, stemX2, stemY2;
+      const cardW = 104;
+      const cardH = 46;
+
+      if (seg.id === "SEG-05") {
+        cardX = mx + 24;
+        cardY = my - cardH / 2;
+        stemX1 = mx; stemY1 = my;
+        stemX2 = cardX; stemY2 = my;
+      } else if (seg.id === "SEG-03") {
+        cardX = mx - cardW / 2;
+        cardY = my - 54;
+        stemX1 = mx; stemY1 = my;
+        stemX2 = mx; stemY2 = my - 12;
+      } else if (seg.id === "SEG-04") {
+        cardX = mx - cardW / 2;
+        cardY = my + 18;
+        stemX1 = mx; stemY1 = my;
+        stemX2 = mx; stemY2 = my + 18;
+      } else {
+        const placeAbove = (idx % 2 === 0);
+        cardX = mx - cardW / 2;
+        cardY = placeAbove ? (my - 58) : (my + 16);
+        stemX1 = mx; stemY1 = my;
+        stemX2 = mx; stemY2 = placeAbove ? (my - 14) : (my + 16);
+      }
+
+      const mq2Val = (m.device_online && m.latest) ? Math.round(m.latest.mq2) + " PPM" : (m.device_online ? "NORMAL" : "OFFLINE");
+      const flameText = (m.device_online && m.latest?.flame_detected) ? "🔥 FIRE" : (isValveClosed ? "180° SHUT" : "0° OPEN");
+      const statusColor = isCrit ? "#EF4444" : (isWarn ? "#F59E0B" : (isOffline ? "#94A3B8" : "#00E599"));
+
+      svgHtml += `
+        <!-- Inserted Module: ${m.device_code} on ${seg.code} -->
+        <g class="module-group ${statusClass}" data-device-code="${m.device_code}" style="cursor:pointer;">
+          <!-- Flange joint on pipe -->
+          <circle cx="${mx}" cy="${my}" r="6" fill="#0F172A" stroke="${statusColor}" stroke-width="2" />
+          <circle cx="${mx}" cy="${my}" r="2.5" fill="${statusColor}" />
+
+          ${isNewlyDetected ? `
+            <!-- Sonar Radar Wave on Newly Inserted Module -->
+            <circle class="sonar-circle" cx="${mx}" cy="${my}" r="12" />
+            <circle class="sonar-circle" cx="${mx}" cy="${my}" r="22" />
+          ` : ''}
+
+          <!-- Connector Stem into pipe -->
+          <line x1="${stemX1}" y1="${stemY1}" x2="${stemX2}" y2="${stemY2}" class="module-pin-stem" stroke="${statusColor}" stroke-width="1.5" />
+
+          <!-- Hardware Module Card -->
+          <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" class="module-card-rect" />
+          
+          <!-- Chip Header: Status Dot + Device Code -->
+          <circle cx="${cardX + 14}" cy="${cardY + 14}" r="5" fill="${statusColor}" />
+          <text x="${cardX + 24}" y="${cardY + 18}" font-family="var(--font-display)" font-size="11" font-weight="700" fill="#F8FAFC">${m.device_code}</text>
+          
+          <!-- Telemetry & Valve Status -->
+          <text x="${cardX + 10}" y="${cardY + 34}" font-family="var(--font-mono)" font-size="9" fill="${isCrit ? '#FCA5A5' : '#CBD5E1'}">${mq2Val} · ${flameText}</text>
+        </g>
+      `;
+    });
+
+    // If segment has space, show subtle quick insertion slot
+    if (mods.length < 2) {
+      const slotPos = mods.length === 0 ? 0.5 : (mods[0].position_ratio > 0.5 ? 0.3 : 0.72);
+      const sx = coords.x1 + (coords.x2 - coords.x1) * slotPos;
+      const sy = coords.y1 + (coords.y2 - coords.y1) * slotPos;
+
+      svgHtml += `
+        <g class="segment-quick-slot" data-segment-id="${seg.id}" style="cursor:pointer;" title="Click to insert new module into ${seg.code}">
+          <circle cx="${sx}" cy="${sy}" r="11" />
+          <text x="${sx}" y="${sy + 3.5}" text-anchor="middle">+</text>
+        </g>
+      `;
+    }
+  });
+
+  svgHtml += `</svg>`;
+  mount.innerHTML = svgHtml;
+
+  // Attach event listeners to module pins
+  mount.querySelectorAll(".module-group").forEach(el => {
+    el.onclick = () => {
+      const code = el.dataset.deviceCode;
+      openModuleInspectorByCode(code);
+    };
+  });
+
+  // Attach event listeners to quick slot clickers & labels
+  mount.querySelectorAll(".segment-quick-slot, .segment-label-chip").forEach(el => {
+    el.onclick = () => {
+      const segId = el.dataset.segmentId;
+      openInsertModuleModal(segId);
+    };
+  });
+
+  renderSegmentsStrip();
+}
+
+function renderSegmentsStrip() {
+  const container = document.getElementById("segments-strip");
+  if (!container || !state.schematic) return;
+
+  const segs = state.schematic.segments || [];
+  container.innerHTML = segs.map(seg => {
+    const isCrit = seg.status === "CRITICAL";
+    const isWarn = seg.status === "WARNING";
+    const statusColor = isCrit ? "var(--crit)" : (isWarn ? "var(--warn)" : (seg.status === "OFFLINE" ? "var(--text-dim)" : "var(--safe)"));
+    const modCount = (seg.modules || []).length;
+    const maxMq2 = seg.max_mq2 > 0 ? `${seg.max_mq2.toFixed(0)} PPM` : "Normal";
+
+    return `
+      <div class="seg-strip-card" data-segment-id="${seg.id}" style="${isCrit ? 'border-color:var(--crit);box-shadow:0 0 15px var(--crit-glow);' : ''}">
+        <div class="seg-strip-top">
+          <span class="seg-strip-code">${escapeHtml(seg.code)}</span>
+          <span class="status-badge ${seg.status}" style="font-size:9.5px;padding:2px 7px;">${seg.status}</span>
+        </div>
+        <div class="seg-strip-name" title="${escapeHtml(seg.name)}">${escapeHtml(seg.name)}</div>
+        <div class="seg-strip-meta">
+          <span>📦 <b>${modCount}</b> inserted</span>
+          <span style="color:${statusColor};font-family:var(--font-mono);">⚡ ${maxMq2}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".seg-strip-card").forEach(card => {
+    card.onclick = () => {
+      const segId = card.dataset.segmentId;
+      openInsertModuleModal(segId);
+    };
+  });
+}
+
+function handleNewModuleDetected(mod) {
+  state.newlyDetectedModules.add(mod.device_code);
+
+  const bannerWrap = document.getElementById("auto-detect-banner-container");
+  if (bannerWrap) {
+    bannerWrap.innerHTML = `
+      <div class="auto-detect-banner" id="active-auto-detect-banner">
+        <div class="auto-detect-content">
+          <span class="auto-detect-beacon"></span>
+          <div>
+            <b>⚡ NEW HARDWARE MODULE DETECTED & INSERTED:</b>
+            <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan);margin:0 4px;">[${escapeHtml(mod.device_code)}]</span>
+            linked to <b>${escapeHtml(mod.segment_name || mod.segment_id)}</b>.
+            Real-time telemetry stream synchronized on schematic map.
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-ghost" style="padding:4px 10px;font-size:11.5px;color:var(--neon-brand);border-color:rgba(0,229,153,0.4);" id="banner-inspect-btn">
+            Inspect Module ➔
+          </button>
+          <button class="btn-ghost" style="padding:4px 8px;font-size:12px;" onclick="document.getElementById('active-auto-detect-banner')?.remove()">✕</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("banner-inspect-btn").onclick = () => openModuleInspectorByCode(mod.device_code);
+
+    if (state.autoDetectBannerTimeout) clearTimeout(state.autoDetectBannerTimeout);
+    state.autoDetectBannerTimeout = setTimeout(() => {
+      const b = document.getElementById("active-auto-detect-banner");
+      if (b) b.remove();
+    }, 14000);
+  }
+
+  toast(`⚡ Auto-Detected hardware module: ${mod.device_code} inserted into ${mod.segment_name || mod.segment_id}`, "safe");
+
+  // Keep newly detected highlight active for 20s
+  setTimeout(() => {
+    state.newlyDetectedModules.delete(mod.device_code);
+    renderSchematicMap();
+  }, 20000);
+
+  renderSchematicMap();
+}
+
+function openInsertModuleModal(preselectedSegId = null) {
+  const segs = state.schematic?.segments || [
+    { id: "SEG-01", name: "Segment 1 — Primary Compressor Inlet", code: "SEG-01" },
+    { id: "SEG-02", name: "Segment 2 — Central Transmission Trunk", code: "SEG-02" },
+    { id: "SEG-03", name: "Segment 3 — Industrial Processing Loop", code: "SEG-03" },
+    { id: "SEG-04", name: "Segment 4 — Distribution Feeder & City Gate", code: "SEG-04" },
+    { id: "SEG-05", name: "Segment 5 — Flare & Emergency Vent Bypass", code: "SEG-05" }
+  ];
+
+  let nextNum = 2;
+  const existingCodes = new Set();
+  if (state.schematic) {
+    state.schematic.segments.forEach(s => (s.modules || []).forEach(m => existingCodes.add(m.device_code)));
+  }
+  while (existingCodes.has(`ESP32-0${nextNum}`) || existingCodes.has(`ESP32-${nextNum}`)) {
+    nextNum++;
+  }
+  const suggestedCode = `ESP32-0${nextNum}`;
+
+  openAdminModal("Insert New Hardware Module to Pipeline", `
+    <form id="insert-module-form">
+      <div class="field">
+        <label>Target Pipeline Segment</label>
+        <select name="segment_id" id="insert-seg-select" style="width:100%;background:var(--bg-2);border:1px solid var(--line);color:var(--text-0);padding:11px 14px;border-radius:var(--radius-s);font-size:13px;">
+          ${segs.map(s => `
+            <option value="${s.id}" ${preselectedSegId === s.id ? 'selected' : ''}>
+              ${escapeHtml(s.code ? s.code + ' — ' + s.name : s.name)}
+            </option>
+          `).join("")}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Device Identifier (Hardware Code)</label>
+        <input name="device_code" value="${suggestedCode}" placeholder="e.g. ESP32-02, ARDUINO-02" required>
+      </div>
+
+      <div class="field">
+        <label>Hardware Architecture & Sensor Package</label>
+        <select name="hardware_type" style="width:100%;background:var(--bg-2);border:1px solid var(--line);color:var(--text-0);padding:11px 14px;border-radius:var(--radius-s);font-size:13px;">
+          <option value="ESP32-WROOM-32 + MQ-2 + 180° Servo">ESP32-WROOM-32 + MQ-2 Gas + Optical Flame + 180° Servo</option>
+          <option value="Arduino Uno R3 + MQ-2 + SG90 Servo">Arduino Uno R3 + MQ-2 + SG90 Servo (USB Bridge)</option>
+          <option value="Industrial Gas Node + MG996R High-Torque Servo">Industrial Gas Node + MG996R High-Torque Servo</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label style="display:flex;justify-content:space-between;">
+          <span>Insertion Point (% along pipeline segment)</span>
+          <span id="pos-display" style="font-family:var(--font-mono);color:var(--cyan);font-weight:700;">50%</span>
+        </label>
+        <div class="range-slider-wrap">
+          <input type="range" name="position_ratio" id="insert-pos-slider" min="10" max="90" value="50" step="5">
+        </div>
+      </div>
+
+      <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius-m);padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:8px;">Initial Telemetry Baseline:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-2);">MQ-2 Gas (PPM)</label>
+            <input type="number" name="initial_mq2" value="160" min="20" max="999" style="width:100%;background:var(--bg-1);border:1px solid var(--line);color:var(--text-0);padding:6px 10px;border-radius:var(--radius-xs);font-size:12px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-2);">Pressure (Bar)</label>
+            <input type="number" name="initial_pressure" value="1.02" step="0.01" style="width:100%;background:var(--bg-1);border:1px solid var(--line);color:var(--text-0);padding:6px 10px;border-radius:var(--radius-xs);font-size:12px;">
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary" type="submit" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+        <span>🔌</span><span>Connect & Insert into Pipeline</span>
+      </button>
+    </form>
+  `);
+
+  const slider = document.getElementById("insert-pos-slider");
+  const posDisp = document.getElementById("pos-display");
+  if (slider && posDisp) {
+    slider.oninput = (e) => posDisp.textContent = `${e.target.value}%`;
+  }
+
+  document.getElementById("insert-module-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const payload = {
+        device_code: fd.get("device_code").trim(),
+        segment_id: fd.get("segment_id"),
+        hardware_type: fd.get("hardware_type"),
+        position_ratio: parseFloat(fd.get("position_ratio")) / 100,
+        initial_mq2: parseFloat(fd.get("initial_mq2")) || 160.0,
+        initial_pressure: parseFloat(fd.get("initial_pressure")) || 1.02,
+        initial_flame: false
+      };
+      const res = await API.connectModule(payload);
+      toast(`Hardware module ${res.device_code} inserted into ${res.segment_name}!`, "safe");
+      document.getElementById("admin-scrim")?.remove();
+      handleNewModuleDetected(res);
+      await loadZonesAndIncidents();
+    } catch (err) {
+      toast("Failed to insert module: " + err.message, "crit");
+    }
+  };
+}
+
+async function simulateHotplugModule() {
+  const existingCodes = new Set();
+  if (state.schematic) {
+    state.schematic.segments.forEach(s => (s.modules || []).forEach(m => existingCodes.add(m.device_code)));
+  }
+  let nextNum = 2;
+  while (existingCodes.has(`ESP32-0${nextNum}`) || existingCodes.has(`ESP32-${nextNum}`)) {
+    nextNum++;
+  }
+  const deviceCode = `ESP32-0${nextNum}`;
+  
+  let bestSegId = "SEG-02";
+  if (state.schematic) {
+    const segCounts = state.schematic.segments.map(s => ({ id: s.id, count: (s.modules || []).length }));
+    segCounts.sort((a, b) => a.count - b.count);
+    bestSegId = segCounts[0].id;
+  }
+
+  try {
+    toast(`Simulating hotplug connection for ${deviceCode}...`, "info");
+    const res = await API.connectModule({
+      device_code: deviceCode,
+      segment_id: bestSegId,
+      hardware_type: "ESP32-WROOM-32 + MQ-2 + 180° Servo",
+      position_ratio: 0.55,
+      initial_mq2: 155.0,
+      initial_flame: false,
+    });
+    handleNewModuleDetected(res);
+    await loadZonesAndIncidents();
+  } catch (err) {
+    toast("Hotplug simulation failed: " + err.message, "crit");
+  }
+}
+
+function openModuleInspectorByCode(deviceCode) {
+  if (!state.schematic) return;
+  let targetMod = null;
+  let targetSeg = null;
+  for (const seg of state.schematic.segments) {
+    const found = (seg.modules || []).find(m => m.device_code === deviceCode);
+    if (found) {
+      targetMod = found;
+      targetSeg = seg;
+      break;
+    }
+  }
+  if (!targetMod) {
+    toast(`Module ${deviceCode} not found on pipeline`, "error");
+    return;
+  }
+  openModuleInspector(targetMod, targetSeg);
+}
+
+function openModuleInspector(mod, seg = null) {
+  if (!seg && state.schematic) {
+    seg = state.schematic.segments.find(s => s.id === mod.segment_id);
+  }
+  const isOnline = mod.device_online;
+  const isValveOpen = mod.valve_state === "OPEN";
+
+  openAdminModal(`Module Inspector — ${mod.device_code}`, `
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius-m);padding:12px 16px;">
+        <div>
+          <div style="font-weight:700;font-size:16px;color:var(--text-0);">${escapeHtml(mod.device_code)}</div>
+          <div style="color:var(--text-2);font-size:12px;">${escapeHtml(mod.segment_name || seg?.name || "Pipeline")} · Station KM ${round(mod.position_ratio * (seg?.length_km || 3.2), 1)}</div>
+        </div>
+        <span class="status-badge ${isOnline ? mod.status : 'CRITICAL'}">${isOnline ? mod.status : 'OFFLINE'}</span>
+      </div>
+
+      <div class="module-inspector-grid">
+        <div class="module-prop-card">
+          <div class="label">Hardware Architecture</div>
+          <div class="value" style="font-size:12px;font-family:var(--font-ui);">${escapeHtml(mod.hardware_type)}</div>
+        </div>
+        <div class="module-prop-card">
+          <div class="label">Servo Valve Position</div>
+          <div class="value" style="color:${isValveOpen ? 'var(--safe)' : 'var(--crit)'};">
+            ${isValveOpen ? '0° OPEN (ON)' : '180° CLOSED (OFF)'}
+          </div>
+        </div>
+        <div class="module-prop-card">
+          <div class="label">MQ-2 Gas Level</div>
+          <div class="value" style="color:${(mod.latest?.mq2 > 300) ? 'var(--crit)' : 'var(--text-0)'};">
+            ${isOnline && mod.latest ? mod.latest.mq2.toFixed(1) + ' PPM' : 'NO DATA'}
+          </div>
+        </div>
+        <div class="module-prop-card">
+          <div class="label">Optical Flame Sensor</div>
+          <div class="value" style="color:${mod.latest?.flame_detected ? 'var(--crit)' : 'var(--text-0)'};">
+            ${isOnline && mod.latest ? (mod.latest.flame_detected ? 'FIRE DETECTED' : 'Clear') : 'NO DATA'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick 180° Emergency Shutoff Control -->
+      <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius-m);padding:14px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-weight:700;font-size:13px;color:var(--text-0);">Servo Valve Interception</div>
+          <div style="font-size:11.5px;color:var(--text-2);">Command 180° rotation to intercept gas flow at this node</div>
+        </div>
+        <button class="btn-ghost" id="inspector-valve-toggle" style="color:${isValveOpen ? 'var(--crit)' : 'var(--safe)'};border-color:${isValveOpen ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)'};">
+          ${isValveOpen ? '🚨 Shutoff 180°' : '🟢 Open 0°'}
+        </button>
+      </div>
+
+      <!-- Move / Reposition Form -->
+      <div class="module-reposition-box">
+        <div style="font-weight:700;font-size:13px;color:var(--text-0);margin-bottom:8px;">Relocate Module Along Pipeline</div>
+        <form id="reposition-module-form">
+          <div style="display:flex;gap:10px;margin-bottom:10px;">
+            <select name="target_segment" style="flex:1;background:var(--bg-1);border:1px solid var(--line);color:var(--text-0);padding:8px 12px;border-radius:var(--radius-s);font-size:12px;">
+              ${(state.schematic?.segments || []).map(s => `
+                <option value="${s.id}" ${mod.segment_id === s.id ? 'selected' : ''}>
+                  ${escapeHtml(s.code)} — ${escapeHtml(s.name)}
+                </option>
+              `).join("")}
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="range" name="target_pos" id="reposition-slider" min="10" max="90" value="${Math.round(mod.position_ratio * 100)}" style="flex:1;">
+            <span id="reposition-pos-val" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--cyan);width:45px;">${Math.round(mod.position_ratio * 100)}%</span>
+            <button class="btn-ghost" type="submit" style="padding:6px 12px;font-size:12px;">Move Node</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Disconnect Module Button -->
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn-ghost" id="disconnect-module-btn" style="color:#FCA5A5;border-color:rgba(239,68,68,0.3);font-size:12px;">
+          🔌 Disconnect Module from Pipeline
+        </button>
+      </div>
+    </div>
+  `, "640px");
+
+  const repSlider = document.getElementById("reposition-slider");
+  const repVal = document.getElementById("reposition-pos-val");
+  if (repSlider && repVal) {
+    repSlider.oninput = (e) => repVal.textContent = `${e.target.value}%`;
+  }
+
+  // Handle Valve Toggle
+  const vBtn = document.getElementById("inspector-valve-toggle");
+  if (vBtn && mod.zone_id) {
+    vBtn.onclick = async () => {
+      const targetState = isValveOpen ? "CLOSED" : "OPEN";
+      try {
+        await API.setValveState(mod.zone_id, targetState);
+        toast(`Servo commanded to ${targetState === 'OPEN' ? '0° OPEN' : '180° SHUT'}`, "safe");
+        document.getElementById("admin-scrim")?.remove();
+        await loadZonesAndIncidents();
+      } catch (err) { toast(err.message, "crit"); }
+    };
+  }
+
+  // Handle Reposition Submit
+  document.getElementById("reposition-module-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const segId = fd.get("target_segment");
+      const pos = parseFloat(fd.get("target_pos")) / 100;
+      await API.updateModulePosition(mod.device_code, { segment_id: segId, position_ratio: pos });
+      toast(`Module ${mod.device_code} moved successfully!`, "safe");
+      document.getElementById("admin-scrim")?.remove();
+      await loadZonesAndIncidents();
+    } catch (err) { toast("Failed to move module: " + err.message, "crit"); }
+  };
+
+  // Handle Disconnect
+  document.getElementById("disconnect-module-btn").onclick = async () => {
+    if (!confirm(`Are you sure you want to disconnect ${mod.device_code} from the pipeline?`)) return;
+    try {
+      await API.disconnectModule(mod.device_code);
+      toast(`Module ${mod.device_code} disconnected.`, "safe");
+      document.getElementById("admin-scrim")?.remove();
+      await loadZonesAndIncidents();
+    } catch (err) { toast("Failed to disconnect: " + err.message, "crit"); }
+  };
+}
+
+async function runAutoDetectScan() {
+  const btn = document.getElementById("btn-scan-modules");
+  if (btn) btn.disabled = true;
+  toast("Scanning COM ports and telemetry streams for hardware modules...", "info");
+  try {
+    const res = await API.scanPipelineModules();
+    toast(`Scan complete: ${res.scanned_devices} active modules synchronized.`, "safe");
+    await loadZonesAndIncidents();
+  } catch (err) {
+    toast("Scan failed: " + err.message, "crit");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function round(val, dec = 1) {
+  return Number(Math.round(val + 'e' + dec) + 'e-' + dec);
 }
 
 // ================= BOOT ROUTER =================

@@ -7,7 +7,7 @@ from sqlalchemy import text
 from .database import Base, engine, is_sqlite
 from .config import settings
 from .websocket_manager import manager
-from .routers import auth, zones, sensors, incidents, actuator, simulation, audit
+from .routers import auth, zones, sensors, incidents, actuator, simulation, audit, pipeline
 
 Base.metadata.create_all(bind=engine)
 try:
@@ -17,8 +17,29 @@ try:
             cols = [r[1] for r in res]
             if "module" not in cols:
                 conn.execute(text("ALTER TABLE audit_logs ADD COLUMN module VARCHAR DEFAULT 'SYSTEM'"))
+
+            d_res = conn.execute(text("PRAGMA table_info(devices)")).fetchall()
+            d_cols = [r[1] for r in d_res]
+            if "segment_id" not in d_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN segment_id VARCHAR DEFAULT 'SEG-01'"))
+            if "segment_name" not in d_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN segment_name VARCHAR DEFAULT 'Segment 1 — Primary Compressor Inlet'"))
+            if "position_ratio" not in d_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN position_ratio FLOAT DEFAULT 0.5"))
+            if "hardware_type" not in d_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN hardware_type VARCHAR DEFAULT 'ESP32-WROOM-32 + MQ-2 + 180° Servo'"))
+
+            z_res = conn.execute(text("PRAGMA table_info(zones)")).fetchall()
+            z_cols = [r[1] for r in z_res]
+            if "segment_id" not in z_cols:
+                conn.execute(text("ALTER TABLE zones ADD COLUMN segment_id VARCHAR DEFAULT 'SEG-01'"))
         else:
             conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS module VARCHAR DEFAULT 'SYSTEM'"))
+            conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS segment_id VARCHAR DEFAULT 'SEG-01'"))
+            conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS segment_name VARCHAR DEFAULT 'Segment 1 — Primary Compressor Inlet'"))
+            conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS position_ratio FLOAT DEFAULT 0.5"))
+            conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS hardware_type VARCHAR DEFAULT 'ESP32-WROOM-32 + MQ-2 + 180° Servo'"))
+            conn.execute(text("ALTER TABLE zones ADD COLUMN IF NOT EXISTS segment_id VARCHAR DEFAULT 'SEG-01'"))
 except Exception as _mig_err:
     pass
 
@@ -45,6 +66,7 @@ app.include_router(incidents.router)
 app.include_router(actuator.router)
 app.include_router(simulation.router)
 app.include_router(audit.router)
+app.include_router(pipeline.router)
 
 
 @app.get("/api/health")

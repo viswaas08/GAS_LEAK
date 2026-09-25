@@ -44,10 +44,11 @@ def find_arduino_port():
     return "COM3"
 
 
-def post_reading(host: str, device_code: str, mq2: float, flame: bool, valve_closed: bool):
+def post_reading(host: str, device_code: str, mq2: float, flame: bool, valve_closed: bool, segment_id: str = None):
     """Posts sensor telemetry to the website backend and returns the valve state."""
     payload = {
         "device_code": device_code,
+        "segment_id": segment_id,
         "mq2": round(mq2, 1),
         "mq135": round(mq2 * 0.8, 1),
         "pressure": 1.02, # Normal pipeline operating pressure (~1.0 bar)
@@ -127,6 +128,7 @@ def main():
     parser.add_argument("--baud", type=int, default=9600, help="Baud rate (default: 9600)")
     parser.add_argument("--host", default="https://gasleak-git-main-viswaas08s-projects.vercel.app", help="Website backend URL (default: https://gasleak-git-main-viswaas08s-projects.vercel.app)")
     parser.add_argument("--device", default="ESP32-01", help="Device code in dashboard (default: ESP32-01)")
+    parser.add_argument("--segment", default=None, help="Pipeline segment code (e.g. SEG-01, SEG-02). Auto-detected if omitted.")
     args = parser.parse_args()
 
     port = args.port or find_arduino_port()
@@ -136,6 +138,8 @@ def main():
     print(f"Connecting to Arduino on {port} at {args.baud} baud...")
     print(f"Target Website Backend: {args.host}")
     print(f"Hardware Device Code:  {args.device}")
+    if args.segment:
+        print(f"Pipeline Segment:      {args.segment}")
     print("Press Ctrl+C to stop.\n")
 
     try:
@@ -184,7 +188,7 @@ def main():
 
                         # Post reading to website backend
                         server_status, valve_cmd = post_reading(
-                            args.host, args.device, mq2, flame, valve_closed
+                            args.host, args.device, mq2, flame, valve_closed, args.segment
                         )
                         print(f"           ➔ Website Response: Status={server_status} | Remote Valve={valve_cmd}")
 

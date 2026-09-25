@@ -55,6 +55,7 @@ class Zone(Base):
     id = Column(String, primary_key=True, default=gen_id)
     name = Column(String, nullable=False)              # e.g. "Zone 01"
     location = Column(String, nullable=True)
+    segment_id = Column(String, default="SEG-01", nullable=True)  # e.g. "SEG-01"
     device_id = Column(String, ForeignKey("devices.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -77,6 +78,10 @@ class Device(Base):
     __tablename__ = "devices"
     id = Column(String, primary_key=True, default=gen_id)
     device_code = Column(String, unique=True, nullable=False)  # e.g. "ESP32-01"
+    segment_id = Column(String, default="SEG-01", nullable=True)  # e.g. "SEG-01"
+    segment_name = Column(String, default="Segment 1 — Primary Compressor Inlet", nullable=True)
+    position_ratio = Column(Float, default=0.5, nullable=True)  # 0.0 to 1.0 along segment
+    hardware_type = Column(String, default="ESP32-WROOM-32 + MQ-2 + 180° Servo", nullable=True)
     zone = relationship("Zone", back_populates="device", uselist=False)
     last_heartbeat = Column(DateTime, nullable=True)
     firmware_version = Column(String, default="1.0.0")
