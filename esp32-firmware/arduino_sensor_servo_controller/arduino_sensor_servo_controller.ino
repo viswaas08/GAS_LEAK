@@ -57,6 +57,7 @@ Servo valveServo;
 SoftwareSerial espSerial(PIN_SW_RX, PIN_SW_TX); // RX, TX
 
 bool isValveClosed = false;
+bool manualShutoffHold = false;
 unsigned long lastTelemetryTime = 0;
 const unsigned long TELEMETRY_INTERVAL = 2000; // Send telemetry every 2 seconds
 
@@ -85,6 +86,7 @@ void setup() {
   valveServo.attach(PIN_SERVO);
   valveServo.write(VALVE_OPEN_ANGLE); // Start in OPEN position
   isValveClosed = false;
+  manualShutoffHold = false;
 
   Serial.println(F("=================================================="));
   Serial.println(F(" PipelineGuard: Arduino Gas & Flame Controller   "));
@@ -106,11 +108,13 @@ void loop() {
       switchStableState = switchReading;
       if (switchStableState == LOW) {
         if (isValveClosed) {
+          manualShutoffHold = false;
           valveServo.write(VALVE_OPEN_ANGLE);
           isValveClosed = false;
           digitalWrite(PIN_BUZZER, LOW);
           Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 0° (OPEN)"));
         } else {
+          manualShutoffHold = true;
           valveServo.write(VALVE_CLOSED_ANGLE);
           isValveClosed = true;
           digitalWrite(PIN_BUZZER, HIGH);
@@ -129,8 +133,8 @@ void loop() {
   // 3. Read Flame Sensor (Typical modules output LOW when flame detected)
   bool flameDetected = (digitalRead(PIN_FLAME) == LOW);
 
-  // 4. Logic: Check for Gas Leakage (> 300) OR Flame Event
-  bool hazardDetected = (gasLevel > GAS_THRESHOLD) || flameDetected;
+  // 4. Logic: Check for Gas Leakage (> 300) OR Flame Event (with 3s boot warmup filter)
+  bool hazardDetected = (millis() > 3000) && ((gasLevel > GAS_THRESHOLD) || flameDetected);
 
   if (hazardDetected) {
     // Turn ON Alarm Indicator
@@ -142,23 +146,32 @@ void loop() {
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
     }
-  } else if (!isValveClosed) {
+  } else {
+    // SAFE MODE: Turn off buzzer and keep / restore valve to 0° (OPEN)
     digitalWrite(PIN_BUZZER, LOW);
+    if (isValveClosed && !manualShutoffHold) {
+      valveServo.write(VALVE_OPEN_ANGLE);
+      isValveClosed = false;
+      Serial.println(F("[SAFE MODE] Environment safe. Restoring valve to 0° (OPEN)."));
+    }
   }
 
   // 5. Remote Commands from Hardware Serial or ESP32 SoftwareSerial
   auto handleCmd = [](String cmd) {
     cmd.trim();
     if (cmd == "SHUTOFF" || cmd == "OFF" || cmd == "CLOSE") {
+      manualShutoffHold = true;
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
       digitalWrite(PIN_BUZZER, HIGH);
     } else if (cmd == "OPEN" || cmd == "ON") {
+      manualShutoffHold = false;
       valveServo.write(VALVE_OPEN_ANGLE);
       isValveClosed = false;
       digitalWrite(PIN_BUZZER, LOW);
     } else if (cmd == "TOGGLE") {
       isValveClosed = !isValveClosed;
+      manualShutoffHold = isValveClosed;
       valveServo.write(isValveClosed ? VALVE_CLOSED_ANGLE : VALVE_OPEN_ANGLE);
       digitalWrite(PIN_BUZZER, isValveClosed ? HIGH : LOW);
     }

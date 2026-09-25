@@ -52,6 +52,7 @@ const unsigned long SEND_INTERVAL_MS = 2000; // Send reading every 2 seconds
 
 unsigned long lastSendTime = 0;
 bool isValveClosed = false;
+bool manualShutoffHold = false;
 
 // Manual switch debounce state
 int lastSwitchReading = HIGH;
@@ -100,6 +101,8 @@ void setup() {
   digitalWrite(PIN_LED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(PIN_ACTUATOR, LOW); // Start OPEN
+  isValveClosed = false;
+  manualShutoffHold = false;
 
   // ADC resolution to 12-bit (0-4095)
   analogReadResolution(12);
@@ -107,7 +110,7 @@ void setup() {
   connectWiFi();
 }
 
-void sendReadingToWebsite(float gasValue, float airQualityValue, float pressureValue, bool flame) {
+void sendReadingToWebsite(float gasValue, float airQualityValue, float pressureValue, bool flame, bool valveClosed) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[HTTP] Wi-Fi disconnected. Reconnecting...");
     connectWiFi();
@@ -125,6 +128,7 @@ void sendReadingToWebsite(float gasValue, float airQualityValue, float pressureV
   doc["mq135"]          = airQualityValue;   // Secondary air quality (or duplicate)
   doc["pressure"]       = pressureValue;     // Normal pipeline pressure (~1.0 bar)
   doc["flame_detected"] = flame;
+  doc["valve_closed"]   = valveClosed;
 
   String jsonPayload;
   serializeJson(doc, jsonPayload);
@@ -160,6 +164,7 @@ void loop() {
       if (switchStableState == LOW) {
         // Toggle valve
         isValveClosed = !isValveClosed;
+        manualShutoffHold = isValveClosed;
         digitalWrite(PIN_ACTUATOR, isValveClosed ? HIGH : LOW);
         if (isValveClosed) {
           digitalWrite(PIN_BUZZER, HIGH);
@@ -192,7 +197,7 @@ void loop() {
 
     // Simulated secondary readings if only 1 physical sensor is attached
     float airQuality = gasLevel * 0.85; 
-    float normalPressure = isValveClosed ? 0.2 : 1.02; // bar
+    float normalPressure = 1.02; // Normal operating pressure (~1.0 bar)
     bool flameDetected = false;
 
     // 4. Print Data to Serial Monitor
@@ -204,8 +209,9 @@ void loop() {
     Serial.print(" | Valve: ");
     Serial.println(isValveClosed ? "CLOSED" : "OPEN");
 
-    // 5. Threshold check: Greater than 300
-    if (gasLevel > GAS_THRESHOLD) {
+    // 5. Threshold check: Greater than 300 (with 3s boot warmup filter)
+    bool hazardDetected = (millis() > 3000) && (gasLevel > GAS_THRESHOLD);
+    if (hazardDetected) {
       Serial.println(">>> [ALERT] GAS LEVEL > 300 DETECTED! <<<");
       Serial.println(">>> Triggering Alarm & Closing Valve! <<<");
 
@@ -215,12 +221,18 @@ void loop() {
         isValveClosed = true;
         digitalWrite(PIN_ACTUATOR, HIGH);
       }
-    } else if (!isValveClosed) {
+    } else {
+      // SAFE MODE: Turn off alerts and auto-restore valve to OPEN
       digitalWrite(PIN_LED, LOW);
       digitalWrite(PIN_BUZZER, LOW);
+      if (isValveClosed && !manualShutoffHold) {
+        isValveClosed = false;
+        digitalWrite(PIN_ACTUATOR, LOW);
+        Serial.println(F("[SAFE MODE] Environment safe. Restoring valve to OPEN."));
+      }
     }
 
     // 6. Send data to website backend
-    sendReadingToWebsite(gasLevel, airQuality, normalPressure, flameDetected);
+    sendReadingToWebsite(gasLevel, airQuality, normalPressure, flameDetected, isValveClosed);
   }
 }

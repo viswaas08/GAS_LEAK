@@ -56,6 +56,7 @@ const int VALVE_CLOSED_ANGLE = 180;
 
 Servo valveServo;
 bool isValveClosed = false;
+bool manualShutoffHold = false;
 unsigned long lastSend = 0;
 
 // Manual switch state & debounce
@@ -79,6 +80,7 @@ void setup() {
   valveServo.attach(PIN_SERVO);
   valveServo.write(VALVE_OPEN_ANGLE);
   isValveClosed = false;
+  manualShutoffHold = false;
 }
 
 void loop() {
@@ -95,12 +97,14 @@ void loop() {
       if (switchStableState == LOW) {
         if (isValveClosed) {
           // Manual Switch turned ON -> Open valve (0°)
+          manualShutoffHold = false;
           valveServo.write(VALVE_OPEN_ANGLE);
           isValveClosed = false;
           digitalWrite(PIN_BUZZER, LOW);
           Serial.println(F("[MANUAL SWITCH] Toggled -> Valve 0° (OPEN)"));
         } else {
           // Manual Switch turned OFF -> Shut off valve (180°)
+          manualShutoffHold = true;
           valveServo.write(VALVE_CLOSED_ANGLE);
           isValveClosed = true;
           digitalWrite(PIN_BUZZER, HIGH);
@@ -134,16 +138,24 @@ void loop() {
   bool flameDetected = (flamePinState == LOW);
 
   // 4. Local Safety Logic: Gas > 300 PPM or Flame detected -> 180° Emergency Shutoff
-  bool localHazard = (gasLevel >= GAS_THRESHOLD) || flameDetected;
+  // Warmup guard: Ignore readings during first 3 seconds of boot to avoid startup sensor spikes
+  bool localHazard = (millis() > 3000) && ((gasLevel >= GAS_THRESHOLD) || flameDetected);
 
   if (localHazard) {
     digitalWrite(PIN_BUZZER, HIGH);
     if (!isValveClosed) {
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
+      Serial.println(F("[HAZARD DETECTED] Gas/Flame hazard! Valve rotated to 180° (CLOSED)"));
     }
-  } else if (!isValveClosed) {
+  } else {
+    // SAFE MODE: Turn off buzzer and keep / restore valve to 0° (OPEN)
     digitalWrite(PIN_BUZZER, LOW);
+    if (isValveClosed && !manualShutoffHold) {
+      valveServo.write(VALVE_OPEN_ANGLE);
+      isValveClosed = false;
+      Serial.println(F("[SAFE MODE] Environment safe. Restoring valve to 0° (OPEN)."));
+    }
   }
 
   // 5. Remote / Bridge Control Commands via USB Serial from Website Operator
@@ -151,15 +163,18 @@ void loop() {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
     if (cmd == "SHUTOFF" || cmd == "OFF" || cmd == "CLOSE") {
+      manualShutoffHold = true;
       valveServo.write(VALVE_CLOSED_ANGLE);
       isValveClosed = true;
       digitalWrite(PIN_BUZZER, HIGH);
     } else if (cmd == "OPEN" || cmd == "ON") {
+      manualShutoffHold = false;
       valveServo.write(VALVE_OPEN_ANGLE);
       isValveClosed = false;
       digitalWrite(PIN_BUZZER, LOW);
     } else if (cmd == "TOGGLE") {
       isValveClosed = !isValveClosed;
+      manualShutoffHold = isValveClosed;
       valveServo.write(isValveClosed ? VALVE_CLOSED_ANGLE : VALVE_OPEN_ANGLE);
       digitalWrite(PIN_BUZZER, isValveClosed ? HIGH : LOW);
     }

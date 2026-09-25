@@ -50,8 +50,9 @@ def post_reading(host: str, device_code: str, mq2: float, flame: bool, valve_clo
         "device_code": device_code,
         "mq2": round(mq2, 1),
         "mq135": round(mq2 * 0.8, 1),
-        "pressure": 0.2 if valve_closed else 1.0,
-        "flame_detected": flame
+        "pressure": 1.02, # Normal pipeline operating pressure (~1.0 bar)
+        "flame_detected": flame,
+        "valve_closed": valve_closed
     }
 
     url = f"{host.rstrip('/')}/api/sensors"
@@ -187,9 +188,16 @@ def main():
                         )
                         print(f"           ➔ Website Response: Status={server_status} | Remote Valve={valve_cmd}")
 
-                        # Remote website control: if operator clicked "Emergency shutoff" or manual switch
-                        if valve_cmd in ("COMMAND_SENT", "CLOSED") and not valve_closed:
-                            print("           ➔ [COMMAND] Remote Switch OFF / Shutoff ➔ Arduino Servo 180° CLOSED!")
+                        is_safe = (mq2 < 300.0 and not flame)
+
+                        # Remote website control & Safe Mode Enforcement:
+                        if is_safe and valve_closed:
+                            # Environment is completely safe; ensure Arduino valve stays 0° OPEN
+                            print("           ➔ [SAFE MODE] Environment safe ➔ Ensuring Arduino Servo is 0° OPEN!")
+                            ser.write(b"OPEN\n")
+                            ser.flush()
+                        elif valve_cmd in ("COMMAND_SENT", "WAITING_CONFIRMATION") and not valve_closed and not is_safe:
+                            print("           ➔ [COMMAND] Remote Emergency Shutoff ➔ Arduino Servo 180° CLOSED!")
                             ser.write(b"SHUTOFF\n")
                             ser.flush()
                         elif valve_cmd == "OPEN" and valve_closed:

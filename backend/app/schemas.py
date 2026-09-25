@@ -86,6 +86,7 @@ class SensorIngest(BaseModel):
     mq135: float
     pressure: float
     flame_detected: bool = False
+    valve_closed: Optional[bool] = None
 
 
 class SensorReadingOut(BaseModel):
